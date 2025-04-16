@@ -124,89 +124,261 @@ async def handle_chat(request: ChatRequest):
     response_suggestions = []
     
     # Core Conversation Logic - State Machine
-    if current_stage == "INIT" or intent == "GREETING":
-        # Initial greeting or explicit greeting intent
+    if intent == "GREETING" and current_stage == "INIT":
+        # Handle simple initial greeting
         bot_message = "Hi! I'm here to help you discover your next great read. How can I help? You can tell me about genres you like, authors, or a book you recently enjoyed."
         response_suggestions = ["Suggest Fantasy Books", "Recommend Sci-Fi", "Books like The Hobbit"]
         user_state["stage"] = "AWAITING_PREFERENCES"
-        
-    elif current_stage == "AWAITING_PREFERENCES" or intent == "REQUEST_RECOMMENDATION":
-        # User has provided preferences or explicitly requested recommendations
-        bot_message = f"Okay, searching for recommendations based on: '{request.message}'..."
-        
-        # Store preferences from this interaction
-        user_state["details"]["preferences_text"] = request.message
-        user_state["details"]["nlp_entities"] = entities
-        
-        # Call ChatGPT to get recommendation ideas
-        recommendation_ideas = await get_chatgpt_recommendations(
-            preferences=entities or {"raw_query": request.message}, 
-            history=user_state["history"],
-            max_recommendations=5
-        )
-        
-        if recommendation_ideas:
-            book_results = []
-            
-            # Process each recommendation idea
-            for idea in recommendation_ideas:
-                print(f"Processing recommendation idea: {idea}")
-                # Call mocked search function
-                search_results = await search_google_books(query=idea, max_results=1)
-                
-                if search_results:
-                    book_id = search_results[0].get("id")
-                    if book_id:
-                        # Get detailed information for the book
-                        book_details = await get_book_details_by_id(book_id)
-                        if book_details:
-                            # Add mock affiliate link
-                            book_details["amazon_link"] = f"https://www.amazon.com/dp/{book_details.get('isbn13', '')}?tag={os.getenv('AMAZON_ASSOCIATE_TAG', 'bookgpt-20')}"
-                            book_results.append(book_details)
-            
-            if book_results:
-                bot_message = "Here are a few recommendations I found based on your request:"
-                user_state["details"]["last_recommendations"] = book_results  # Store for later reference
-                response_suggestions = ["Tell me more about #1", "Show different recommendations", "Start Over"]
-                user_state["stage"] = "SHOWING_RECOMMENDATIONS"
-            else:
-                # ChatGPT gave ideas but search/details failed
-                bot_message = "I came up with some ideas, but couldn't find specific book details right now. Could you try rephrasing your request?"
-                response_suggestions = ["Try Fantasy genre", "Suggest popular Sci-Fi", "Recommend Thriller books"]
-        else:
-            # ChatGPT failed to generate recommendations
-            bot_message = "I couldn't come up with recommendations for that right now. Please try again with different keywords or genres."
-            response_suggestions = ["Try Fantasy genre", "Suggest popular books", "Recommend Thriller books"]
 
-    elif current_stage == "SHOWING_RECOMMENDATIONS":
-        # Handle follow-up requests after showing recommendations
+    elif intent == "REQUEST_RECOMMENDATION" and (current_stage == "INIT" or current_stage == "AWAITING_PREFERENCES"):
+        # --- ENHANCED VAGUENESS CHECK ---
+        is_vague = True  # Default assumption
+        
+        # Check message length - longer messages tend to have more context
+        message_words = request.message.split()
+        message_len = len(message_words)
         lower_message = request.message.lower()
         
-        if "more" in lower_message or "detail" in lower_message or "#1" in lower_message:
-            bot_message = "I can tell you more once the detailed view is built! For now, here's a summary of what I recommended earlier."
-            response_suggestions = ["Show different recommendations", "Start Over"]
+        # 1. Check for specific entities from NLP
+        has_entities = bool(entities.get("genre") or entities.get("author") or entities.get("similar_book"))
+        
+        # 2. Check for genre keywords - expanded list
+        genre_keywords = [
+            "fiction", "mystery", "romance", "biography", "history", 
+            "children", "young adult", "ya", "fantasy", "sci-fi", 
+            "science fiction", "thriller", "horror", "literary", 
+            "contemporary", "classic", "crime", "non-fiction", 
+            "memoir", "poetry", "adventure", "dystopian", "historical"
+        ]
+        has_genre = any(word in lower_message for word in genre_keywords)
+        
+        # 3. Check for author references
+        author_phrases = [
+            "by author", "written by", "books by", "author", "writer", 
+            "novels by", "works by", "published by", "wrote"
+        ]
+        has_author = any(phrase in lower_message for phrase in author_phrases)
+        
+        # 4. Check for specific book references or "similar to" phrases
+        book_reference_phrases = [
+            "like", "similar to", "resembles", "reminds me of", "same as", 
+            "in the style of", "comparable to", "books like", "series like",
+            "enjoyed", "loved", "read", "finished", "recommend"
+        ]
+        has_book_reference = any(phrase in lower_message for phrase in book_reference_phrases) and message_len > 3
+        
+        # 5. Check for mood/tone preferences
+        mood_phrases = [
+            "happy", "sad", "uplifting", "dark", "funny", "humorous", 
+            "serious", "light", "deep", "thought-provoking", "inspiring", 
+            "relaxing", "exciting", "suspenseful", "scary", "romantic"
+        ]
+        has_mood = any(phrase in lower_message for phrase in mood_phrases)
+        
+        # 6. Check for time period references
+        time_phrases = [
+            "modern", "contemporary", "classic", "ancient", "medieval", 
+            "19th century", "20th century", "victorian", "recent", 
+            "new", "old", "latest", "antique", "retro", "futuristic"
+        ]
+        has_time_reference = any(phrase in lower_message for phrase in time_phrases)
+        
+        # 7. Check if message is longer than threshold
+        is_detailed_request = message_len > 6
+        
+        # Determine if request has sufficient context based on multiple factors
+        if has_entities or has_genre or has_author or has_book_reference or has_mood or has_time_reference or is_detailed_request:
+            is_vague = False
             
+        # Log the vagueness check results
+        print(f"Vagueness check: is_vague={is_vague}, has_entities={has_entities}, has_genre={has_genre}, " 
+              f"has_author={has_author}, has_book_reference={has_book_reference}, has_mood={has_mood}, "
+              f"has_time_reference={has_time_reference}, is_detailed_request={is_detailed_request}")
+        
+        if is_vague:
+            # Request is too vague, ask for clarification with enhanced options
+            bot_message = "I'd love to help you find your next great read! To provide the most relevant recommendations, could you tell me a bit more about what you're looking for?"
+            
+            # Create dynamic rotating suggestion options based on current timestamp
+            # This ensures different options appear each time
+            import time
+            seed = int(time.time()) % 4  # Use time as a simple rotation mechanism (0-3)
+            
+            # Define suggestion sets
+            genre_suggestions = [
+                "I enjoy fantasy books with dragons",
+                "I'm looking for historical fiction set in ancient Rome",
+                "Recommend me a cozy mystery novel",
+                "I want a science fiction book about space exploration"
+            ]
+            
+            author_suggestions = [
+                "I like books similar to Neil Gaiman's style",
+                "Recommend something by Agatha Christie",
+                "I enjoy authors like Brandon Sanderson",
+                "Books written by female science fiction authors"
+            ]
+            
+            mood_suggestions = [
+                "I need an uplifting book that's not too long",
+                "Looking for a suspenseful thriller with unexpected twists",
+                "Something funny and lighthearted for vacation",
+                "A thought-provoking book about philosophy"
+            ]
+            
+            specific_suggestions = [
+                "Books like The Night Circus but with more adventure",
+                "Fantasy series with well-developed magic systems",
+                "A standalone novel with beautiful prose and character development",
+                "Recent award-winning fiction books from the last 2 years"
+            ]
+            
+            # Rotate each category based on the seed
+            response_suggestions = [
+                genre_suggestions[seed],
+                author_suggestions[(seed + 1) % 4],
+                mood_suggestions[(seed + 2) % 4],
+                specific_suggestions[(seed + 3) % 4]
+            ]
+            
+            user_state["stage"] = "AWAITING_PREFERENCES"  # Remain in this stage
+            # Store the vague request in history
+            user_state["details"]["last_vague_request"] = request.message
+        else:
+            # User is asking for recommendations with sufficient context
+            bot_message = f"Okay, searching for recommendations based on: '{request.message}'..."  # Provide feedback
+            user_state["details"]["preferences_text"] = request.message
+            user_state["details"]["nlp_entities"] = entities
+
+            # --- Call ChatGPT ---
+            recommendation_ideas = await get_chatgpt_recommendations(
+                preferences=entities or {"raw_query": request.message},  # Use entities if available
+                history=user_state["history"],
+                max_recommendations=5
+            )
+
+            if recommendation_ideas:
+                book_results = []
+                # Process each recommendation idea
+                for idea in recommendation_ideas:
+                    print(f"Processing recommendation idea: {idea}")
+                    # Construct search query using title and author from structured data
+                    search_query = f"{idea.get('title', '')} {idea.get('author', '')}"
+                    # Call Google Books API function
+                    search_results = await search_google_books(query=search_query.strip(), max_results=1)
+
+                    if search_results:
+                        book_id = search_results[0].get("id")
+                        if book_id:
+                            # Get detailed information for the book
+                            book_details = await get_book_details_by_id(book_id)
+                            if book_details:
+                                # Add reasoning and affiliate link
+                                book_details["reasoning"] = idea.get("reasoning", "No specific reason provided.")
+                                amazon_tag = os.getenv('AMAZON_ASSOCIATE_TAG', 'bookgpt-20')  # Default tag if none set
+                                isbn = book_details.get('isbn13', '')
+                                if isbn:  # Only add link if ISBN exists
+                                    book_details["amazon_link"] = f"https://www.amazon.com/dp/{isbn}?tag={amazon_tag}"
+                                else:
+                                    book_details["amazon_link"] = None  # No link if no ISBN
+                                book_results.append(book_details)
+
+                if book_results:
+                    bot_message = "Here are a few recommendations I found based on your request:"
+                    user_state["details"]["last_recommendations"] = book_results
+                    response_suggestions = ["Tell me more about #1", "Show different recommendations", "Start Over"]
+                    user_state["stage"] = "SHOWING_RECOMMENDATIONS"
+                else:
+                    bot_message = "I came up with some ideas, but couldn't find specific book details for them right now. Could you try rephrasing your request or specifying different criteria?"
+                    response_suggestions = ["Try Fantasy genre", "Suggest popular Sci-Fi", "Recommend Thriller books"]
+                    user_state["stage"] = "AWAITING_PREFERENCES"  # Go back to expecting preferences
+            else:
+                bot_message = "I couldn't generate recommendation ideas based on that right now. Please try different keywords or genres."
+                response_suggestions = ["Try Fantasy genre", "Suggest popular books", "Recommend Thriller books"]
+                user_state["stage"] = "AWAITING_PREFERENCES"  # Go back to expecting preferences
+
+    elif current_stage == "SHOWING_RECOMMENDATIONS":
+        # Handle follow-ups after showing recommendations
+        lower_message = request.message.lower()
+
+        if "more" in lower_message or "detail" in lower_message or "#1" in lower_message:
+            # Attempt to retrieve stored recommendations
+            last_recs = user_state["details"].get("last_recommendations", [])
+            if last_recs:
+                 # Extract detail based on number if possible - crude example:
+                 num_match = [int(s) for s in request.message if s.isdigit()]
+                 idx = num_match[0] - 1 if num_match and 0 <= num_match[0]-1 < len(last_recs) else 0
+                 selected_book = last_recs[idx]
+                 bot_message = f"Okay, about '{selected_book.get('title', 'that book')}': {selected_book.get('description', 'No further details available right now.')}"
+            else:
+                 bot_message = "I don't have the previous recommendations handy to give more detail. Could you ask for new ones?"
+            response_suggestions = ["Show different recommendations", "Start Over"]
+            # Keep stage SHOWING_RECOMMENDATIONS
+
         elif "different" in lower_message or "other" in lower_message or "new" in lower_message:
             bot_message = "Okay, what else are you looking for? Please tell me about genres, authors, or books you enjoy."
             response_suggestions = ["Fantasy recommendations", "Sci-Fi books", "Popular Thrillers"]
             user_state["stage"] = "AWAITING_PREFERENCES"
-            
+
         elif "start" in lower_message or "reset" in lower_message or "over" in lower_message:
-            # Reset the conversation
-            user_state = {"history": [{"role": "user", "content": request.message}], "stage": "INIT", "details": {}}
+            user_state = {"history": [{"role": "user", "content": request.message}], "stage": "INIT", "details": {}} # Keep user message for context maybe?
             bot_message = "Let's start over! How can I help you find your next great read?"
             response_suggestions = ["Suggest Fantasy Books", "Recommend Sci-Fi", "Books like The Hobbit"]
             user_state["stage"] = "AWAITING_PREFERENCES"
-            
+
         else:
-            bot_message = "You can ask for more details about these books, different recommendations, or start over."
-            response_suggestions = ["Tell me more about #1", "Show different recommendations", "Start Over"]
-    
+            # If input after showing recommendations doesn't match follow-ups, assume it's a new request
+            bot_message = f"Okay, let me see if I can find recommendations based on: '{request.message}'..."
+            user_state["details"]["preferences_text"] = request.message
+            user_state["details"]["nlp_entities"] = entities
+            
+            # Call ChatGPT for new recommendations
+            recommendation_ideas = await get_chatgpt_recommendations(
+                preferences=entities or {"raw_query": request.message},
+                history=user_state["history"],
+                max_recommendations=5
+            )
+            
+            book_results = []
+            
+            # Process each recommendation idea with structured data
+            if recommendation_ideas:
+                for idea in recommendation_ideas:
+                    print(f"Processing recommendation idea: {idea}")
+                    # Construct search query using title and author from structured data
+                    search_query = f"{idea.get('title', '')} {idea.get('author', '')}"
+                    search_results = await search_google_books(query=search_query.strip(), max_results=1)
+                    
+                    if search_results:
+                        book_id = search_results[0].get("id")
+                        if book_id:
+                            book_details = await get_book_details_by_id(book_id)
+                            if book_details:
+                                # Add reasoning from the structured response
+                                book_details["reasoning"] = idea.get("reasoning", "No specific reason provided.")
+                                amazon_tag = os.getenv('AMAZON_ASSOCIATE_TAG', 'bookgpt-20')
+                                isbn = book_details.get('isbn13', '')
+                                if isbn:
+                                    book_details["amazon_link"] = f"https://www.amazon.com/dp/{isbn}?tag={amazon_tag}"
+                                else:
+                                    book_details["amazon_link"] = None
+                                book_results.append(book_details)
+                
+            if book_results:
+                bot_message = "Based on your new request, here are some recommendations:"
+                user_state["details"]["last_recommendations"] = book_results
+                response_suggestions = ["Tell me more about #1", "Show different recommendations", "Start Over"]
+                user_state["stage"] = "SHOWING_RECOMMENDATIONS"
+            else:
+                bot_message = "Sorry, I couldn't find specific details for that new request..."
+                response_suggestions = ["Try Fantasy genre", "Suggest popular Sci-Fi"]
+                user_state["stage"] = "AWAITING_PREFERENCES" # Go back
+
     else:
-        # Handle unknown intents or stages
-        bot_message = "Sorry, I'm focused on book recommendations right now. How can I help you find a book?"
-        response_suggestions = ["Suggest Fantasy Books", "Recommend Sci-Fi", "Books like The Hobbit"]
-        user_state["stage"] = "AWAITING_PREFERENCES"
+        # Default / Fallback for any unhandled stage/intent combination
+        bot_message = "Sorry, I wasn't sure how to proceed from there. Could you clarify? You can ask for recommendations by genre, author, or similar books."
+        response_suggestions = ["Suggest Fantasy Books", "Recommend Sci-Fi"]
+        user_state["stage"] = "AWAITING_PREFERENCES" # Default back to expecting preferences
     
     # Prepare final response
     final_books_data = user_state["details"].get("last_recommendations", []) if user_state["stage"] == "SHOWING_RECOMMENDATIONS" else []
@@ -343,7 +515,7 @@ async def get_chatgpt_recommendations(
     preferences: Dict[str, Any],
     history: List[Dict[str, str]],
     max_recommendations: int = 5
-) -> List[str]:
+) -> List[Dict[str, Any]]:
     """
     Calls ChatGPT to get book recommendation ideas based on user preferences and history.
     Input:
@@ -351,7 +523,7 @@ async def get_chatgpt_recommendations(
         history: List of recent conversation turns [{'role': 'user', 'content': '...'}, ...]
         max_recommendations: How many distinct book ideas to ask for.
     Output:
-        List of strings, where each string is a book title or title/author pair.
+        List of dictionaries, each containing 'title', 'author', and 'reasoning' fields.
         Returns empty list on error.
     """
     if not client:  # Handle missing API key case
@@ -359,45 +531,58 @@ async def get_chatgpt_recommendations(
         return []
 
     print(f"LLM: Getting recommendations based on preferences: {preferences}")
+    
+    # Convert preferences to a string for the prompt
+    preferences_str = json.dumps(preferences)
+    
+    # --- Construct Prompt with JSON structure requirement ---
+    system_prompt = """You are a helpful book recommendation assistant. Analyze the user's preferences and suggest relevant books.
+Respond ONLY with a valid JSON object containing a 'recommendations' array. Do NOT include any introductory text or markdown formatting.
+Each object in the array must have the following keys:
+- "title": The exact book title.
+- "author": The author(s) of the book.
+- "reasoning": A short explanation (1-2 sentences) specifically explaining WHY this book fits the user's provided preferences."""
 
-    # --- Construct Prompt ---
-    # Basic example, refine based on actual preferences captured
-    prompt_lines = [
-        f"You are a helpful book recommendation assistant. A user has the following preferences: {preferences}. ",
-        f"Based ONLY on these preferences, suggest {max_recommendations} specific book titles (and authors if possible) that they might enjoy. ",
-        "Consider variety. Do not repeat books mentioned in the brief history if provided. ",
-        "Format your response as a simple list, one book per line, like:\nTitle by Author\nAnother Title by Author",
-        # Optional: Add conversation history for context if needed
-        # f"Brief recent conversation context:\n{history}"
-    ]
-    system_prompt = "You are a helpful book recommendation assistant providing specific titles and authors."
-    user_prompt = "\n".join(prompt_lines)
+    user_prompt = f"""Based ONLY on the following user preferences: {preferences_str}
+Suggest {max_recommendations} diverse book recommendations. Provide the title, author, and reasoning for each suggestion in the specified JSON format.
+Make sure your response is a valid parsable JSON object with a 'recommendations' key containing the array of book recommendations."""
 
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt}
     ]
-    # You could prepend relevant history turns to messages here if desired
 
-    print(f"LLM: Sending prompt to ChatGPT: {user_prompt}")
-    # --- Call OpenAI API ---
+    print(f"LLM: Sending prompt to ChatGPT requesting JSON structure")
+    
+    # --- Call OpenAI API with JSON mode ---
     try:
         response = await client.chat.completions.create(
-            model="gpt-3.5-turbo",  # Or "gpt-4o" etc. - Make configurable?
+            model="gpt-3.5-turbo-1106",  # Model with JSON mode support
+            response_format={"type": "json_object"},  # Enable JSON mode
             messages=messages,
-            temperature=0.7,  # Allow some creativity
-            max_tokens=150 * max_recommendations,  # Estimate tokens needed
-            n=1,  # We want one response list
+            temperature=0.6,  # Slightly lower temperature for more structured output
+            max_tokens=250 * max_recommendations,  # Adjust tokens based on expected output size
+            n=1,
             stop=None
         )
         content = response.choices[0].message.content
-        print(f"LLM Raw Response: {content}")
+        print(f"LLM Raw JSON Response: {content}")
 
-        # --- Parse Response ---
-        # Simple parsing: split by newline, remove empty lines
-        recommendations = [line.strip() for line in content.strip().split('\n') if line.strip()]
-        print(f"LLM Parsed Recommendations: {recommendations}")
-        return recommendations[:max_recommendations]  # Ensure we don't exceed max
+        # --- Parse JSON Response ---
+        try:
+            # Parse the JSON response
+            data = json.loads(content)
+            # Extract the recommendations list
+            recommendations = data.get("recommendations", [])
+            print(f"LLM Parsed Recommendations (JSON): {recommendations}")
+            # Return the list of recommendation dictionaries
+            return recommendations[:max_recommendations]
+            
+        except json.JSONDecodeError:
+            print("LLM Error: Failed to parse JSON response from LLM")
+            # Fallback to empty list if JSON parsing fails
+        except TypeError:
+            print("LLM Error: Response content might not be JSON string.")
 
     except openai.APIError as e:
         print(f"LLM Error: OpenAI API returned an API Error: {e}")
