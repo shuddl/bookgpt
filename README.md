@@ -4,7 +4,7 @@
 
 This project is a functional Minimum Viable Product (MVP) of an AI-powered chatbot designed to provide personalized book recommendations. Users can interact with the chatbot via a web interface to describe their reading preferences. The chatbot uses OpenAI's ChatGPT to understand preferences and suggest relevant books, then fetches detailed metadata (cover, description, author, etc.) using the Google Books API. Recommendations are presented with direct affiliate links to Amazon product pages.
 
-The UI aims for a clean, minimalist aesthetic inspired by Perplexity.ai.
+The UI aims for a clean, minimalist aesthetic 
 
 ## Live Demo
 
