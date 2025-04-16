@@ -33,8 +33,8 @@
       }
     },
     {
-      "src": "/(.*)\\.(?:js|css|png|jpg|jpeg|svg|gif|ico)$",
-      "dest": "frontend/$1.$2",
+      "src": "/(.+\\.(js|css|png|jpg|jpeg|svg|gif|ico))$",
+      "dest": "frontend/$1",
       "headers": {
         "Cache-Control": "public, max-age=86400"
       }

@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // In production on Vercel, we can use relative path which gets routed via vercel.json
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const API_URL = isLocalhost ? 'http://localhost:8005/api/chat' : '/api/chat';
-    console.log(`Using API URL: ${API_URL}`); // For debugging
+    console.log(`Using API URL: ${API_URL} on host: ${window.location.hostname}`); // Enhanced debugging
 
     // DOM references
     const messageList = document.getElementById('message-list');
