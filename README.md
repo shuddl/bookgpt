@@ -4,7 +4,7 @@
 
 This project is a functional Minimum Viable Product (MVP) of an AI-powered chatbot designed to provide personalized book recommendations. Users can interact with the chatbot via a web interface to describe their reading preferences. The chatbot uses OpenAI's ChatGPT to understand preferences and suggest relevant books, then fetches detailed metadata (cover, description, author, etc.) using the Google Books API. Recommendations are presented with direct affiliate links to Amazon product pages.
 
-The UI aims for a clean, minimalist aesthetic 
+The UI aims for a clean, minimalist aesthetic
 
 ## Live Demo
 
@@ -97,14 +97,19 @@ The UI aims for a clean, minimalist aesthetic
 
 2. **Set up GitHub Actions for Vercel deployment:**
    * Create a `.github/workflows` directory in your project:
+
      ```bash
      mkdir -p .github/workflows
      ```
+
    * Create a GitHub Actions workflow file:
+
      ```bash
      touch .github/workflows/deploy.yml
      ```
+
    * Add the following content to `deploy.yml`:
+
      ```yaml
      name: Deploy to Vercel
      on:

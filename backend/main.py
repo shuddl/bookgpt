@@ -134,6 +134,37 @@ async def process_nlp(text: str, current_stage: str) -> dict:
 async def root():
     return {"message": "Book Recommendation Bot API"}
 
+async def _fetch_and_process_recommendations(preferences, history, max_recs, amazon_tag):
+    """
+    Helper to fetch recommendations from ChatGPT, then search Google Books and enrich results.
+    Returns a list of book result dicts.
+    """
+    recommendation_ideas = await get_chatgpt_recommendations(
+        preferences=preferences,
+        history=history,
+        max_recommendations=max_recs
+    )
+
+    book_results = []
+    if recommendation_ideas:
+        for idea in recommendation_ideas:
+            print(f"Processing recommendation idea: {idea}")
+            search_query = f"{idea.get('title', '')} {idea.get('author', '')}"
+            search_results = await search_google_books(query=search_query.strip(), max_results=1)
+            if search_results:
+                book_id = search_results[0].get("id")
+                if book_id:
+                    book_details = await get_book_details_by_id(book_id)
+                    if book_details:
+                        book_details["reasoning"] = idea.get("reasoning", "No specific reason provided.")
+                        isbn = book_details.get('isbn13', '')
+                        if isbn:
+                            book_details["amazon_link"] = f"https://www.amazon.com/s?k={isbn}&tag={amazon_tag}"
+                        else:
+                            book_details["amazon_link"] = None
+                        book_results.append(book_details)
+    return book_results
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def handle_chat(request: ChatRequest):
     print(f"Received: user_id={request.user_id}, message='{request.message}'")  # Basic logging
@@ -292,58 +323,27 @@ async def handle_chat(request: ChatRequest):
             # Store the vague request in history
             user_state["details"]["last_vague_request"] = request.message
         else:
-            # User is asking for recommendations with sufficient context
-            bot_message = f"Okay, searching for recommendations based on: '{request.message}'..."  # Provide feedback
+            bot_message = f"Okay, searching for recommendations based on: '{request.message}'..."
             user_state["details"]["preferences_text"] = request.message
             user_state["details"]["nlp_entities"] = entities
 
-            # --- Call ChatGPT ---
-            recommendation_ideas = await get_chatgpt_recommendations(
-                preferences=entities or {"raw_query": request.message},  # Use entities if available
-                history=user_state["history"],
-                max_recommendations=5
+            # --- Use helper function for recommendations ---
+            book_results = await _fetch_and_process_recommendations(
+                entities or {"raw_query": request.message},
+                user_state["history"],
+                5,
+                os.getenv('AMAZON_ASSOCIATE_TAG', 'bookgpt-20')
             )
 
-            if recommendation_ideas:
-                book_results = []
-                # Process each recommendation idea
-                for idea in recommendation_ideas:
-                    print(f"Processing recommendation idea: {idea}")
-                    # Construct search query using title and author from structured data
-                    search_query = f"{idea.get('title', '')} {idea.get('author', '')}"
-                    # Call Google Books API function
-                    search_results = await search_google_books(query=search_query.strip(), max_results=1)
-
-                    if search_results:
-                        book_id = search_results[0].get("id")
-                        if book_id:
-                            # Get detailed information for the book
-                            book_details = await get_book_details_by_id(book_id)
-                            if book_details:
-                                # Add reasoning and affiliate link
-                                book_details["reasoning"] = idea.get("reasoning", "No specific reason provided.")
-                                amazon_tag = os.getenv('AMAZON_ASSOCIATE_TAG', 'bookgpt-20')  # Default tag if none set
-                                isbn = book_details.get('isbn13', '')
-                                if isbn:  # Only add link if ISBN exists
-                                    # Use search URL instead of direct product link for better reliability
-                                    book_details["amazon_link"] = f"https://www.amazon.com/s?k={isbn}&tag={amazon_tag}"
-                                else:
-                                    book_details["amazon_link"] = None  # No link if no ISBN
-                                book_results.append(book_details)
-
-                if book_results:
-                    bot_message = "Here are a few recommendations I found based on your request:"
-                    user_state["details"]["last_recommendations"] = book_results
-                    response_suggestions = ["Tell me more about #1", "Show different recommendations", "Start Over"]
-                    user_state["stage"] = "SHOWING_RECOMMENDATIONS"
-                else:
-                    bot_message = "I came up with some ideas, but couldn't find specific book details for them right now. Could you try rephrasing your request or specifying different criteria?"
-                    response_suggestions = ["Try Fantasy genre", "Suggest popular Sci-Fi", "Recommend Thriller books"]
-                    user_state["stage"] = "AWAITING_PREFERENCES"  # Go back to expecting preferences
+            if book_results:
+                bot_message = "Here are a few recommendations I found based on your request:"
+                user_state["details"]["last_recommendations"] = book_results
+                response_suggestions = ["Tell me more about #1", "Show different recommendations", "Start Over"]
+                user_state["stage"] = "SHOWING_RECOMMENDATIONS"
             else:
-                bot_message = "I couldn't generate recommendation ideas based on that right now. Please try different keywords or genres."
-                response_suggestions = ["Try Fantasy genre", "Suggest popular books", "Recommend Thriller books"]
-                user_state["stage"] = "AWAITING_PREFERENCES"  # Go back to expecting preferences
+                bot_message = "I came up with some ideas, but couldn't find specific book details for them right now. Could you try rephrasing your request or specifying different criteria?"
+                response_suggestions = ["Try Fantasy genre", "Suggest popular Sci-Fi", "Recommend Thriller books"]
+                user_state["stage"] = "AWAITING_PREFERENCES"
 
     elif current_stage == "SHOWING_RECOMMENDATIONS":
         # Handle follow-ups after showing recommendations
@@ -388,40 +388,15 @@ async def handle_chat(request: ChatRequest):
             bot_message = f"Okay, let me see if I can find recommendations based on: '{request.message}'..."
             user_state["details"]["preferences_text"] = request.message
             user_state["details"]["nlp_entities"] = entities
-            
-            # Call ChatGPT for new recommendations
-            recommendation_ideas = await get_chatgpt_recommendations(
-                preferences=entities or {"raw_query": request.message},
-                history=user_state["history"],
-                max_recommendations=5
+
+            # --- Use helper function for recommendations ---
+            book_results = await _fetch_and_process_recommendations(
+                entities or {"raw_query": request.message},
+                user_state["history"],
+                5,
+                os.getenv('AMAZON_ASSOCIATE_TAG', 'bookgpt-20')
             )
-            
-            book_results = []
-            
-            # Process each recommendation idea with structured data
-            if recommendation_ideas:
-                for idea in recommendation_ideas:
-                    print(f"Processing recommendation idea: {idea}")
-                    # Construct search query using title and author from structured data
-                    search_query = f"{idea.get('title', '')} {idea.get('author', '')}"
-                    search_results = await search_google_books(query=search_query.strip(), max_results=1)
-                    
-                    if search_results:
-                        book_id = search_results[0].get("id")
-                        if book_id:
-                            book_details = await get_book_details_by_id(book_id)
-                            if book_details:
-                                # Add reasoning from the structured response
-                                book_details["reasoning"] = idea.get("reasoning", "No specific reason provided.")
-                                amazon_tag = os.getenv('AMAZON_ASSOCIATE_TAG', 'bookgpt-20')
-                                isbn = book_details.get('isbn13', '')
-                                if isbn:
-                                    # Use search URL instead of direct product link for better reliability
-                                    book_details["amazon_link"] = f"https://www.amazon.com/s?k={isbn}&tag={amazon_tag}"
-                                else:
-                                    book_details["amazon_link"] = None
-                                book_results.append(book_details)
-                
+
             if book_results:
                 bot_message = "Based on your new request, here are some recommendations:"
                 user_state["details"]["last_recommendations"] = book_results
@@ -432,7 +407,7 @@ async def handle_chat(request: ChatRequest):
                 response_suggestions = ["Try Fantasy genre", "Suggest popular Sci-Fi"]
                 user_state["stage"] = "AWAITING_PREFERENCES" # Go back
 
-else:
+    else:
         # IMPROVED FALLBACK LOGIC:
         # Check if the message matches any of our common suggestion buttons
         # This acts as a safety net in case our NLP process failed to catch the intent
@@ -442,12 +417,10 @@ else:
             "mystery novels", "contemporary fiction", "bestsellers this year",
             "historical fiction", "books by female authors", "popular mystery novels"
         ]
-        
         if any(suggestion.lower() == lower_message for suggestion in suggestion_matches):
             # This is a button click that our NLP missed - treat it as a recommendation request
             print(f"Fallback logic: Recognized '{request.message}' as a suggestion button click")
             bot_message = f"Looking for {request.message}, one moment..."
-            
             # Extract appropriate entities based on the message
             if "fantasy" in lower_message:
                 entities["genre"] = "Fantasy"
@@ -465,41 +438,16 @@ else:
                 entities["genre"] = "Historical Fiction"
             elif "female" in lower_message and "author" in lower_message:
                 entities["author_attribute"] = "Female"
-                
             # Process as a recommendation request with the extracted entity
             user_state["details"]["preferences_text"] = request.message
             user_state["details"]["nlp_entities"] = entities
-            
-            # Call ChatGPT for book recommendations
-            # Call ChatGPT for new recommendations
-            recommendation_ideas = await get_chatgpt_recommendations(
-                preferences=entities or {"raw_query": request.message},
-                history=user_state["history"],
-                max_recommendations=5
+            # Use helper function for recommendations
+            book_results = await _fetch_and_process_recommendations(
+                entities or {"raw_query": request.message},
+                user_state["history"],
+                5,
+                os.getenv('AMAZON_ASSOCIATE_TAG', 'bookgpt-20')
             )
-            
-            book_results = []
-            
-            # Process recommendation ideas
-            if recommendation_ideas:
-                for idea in recommendation_ideas:
-                    search_query = f"{idea.get('title', '')} {idea.get('author', '')}"
-                    search_results = await search_google_books(query=search_query.strip(), max_results=1)
-                    
-                    if search_results:
-                        book_id = search_results[0].get("id")
-                        if book_id:
-                            book_details = await get_book_details_by_id(book_id)
-                            if book_details:
-                                book_details["reasoning"] = idea.get("reasoning", "No specific reason provided.")
-                                amazon_tag = os.getenv('AMAZON_ASSOCIATE_TAG', 'bookgpt-20')
-                                isbn = book_details.get('isbn13', '')
-                                if isbn:
-                                    book_details["amazon_link"] = f"https://www.amazon.com/s?k={isbn}&tag={amazon_tag}"
-                                else:
-                                    book_details["amazon_link"] = None
-                                book_results.append(book_details)
-            
             if book_results:
                 bot_message = f"Here are some {request.message} that you might enjoy:"
                 user_state["details"]["last_recommendations"] = book_results
@@ -520,20 +468,13 @@ else:
                 "Popular mystery novels"
             ]
             user_state["stage"] = "AWAITING_PREFERENCES" # Default back to expecting preferences
-    
     # Prepare final response
     final_books_data = user_state["details"].get("last_recommendations", []) if user_state["stage"] == "SHOWING_RECOMMENDATIONS" else []
-    
     # Append bot response to history
     user_state["history"].append({"role": "assistant", "content": bot_message})
-    
-    # Clean up sensitive temporary data if needed before saving state
-    # user_state["details"].pop("temp_data", None)
-    
     # Save updated state
     session_states[session_id] = user_state
     print(f"User {session_id} - Saving New State: {user_state}")
-    
     return ChatResponse(
         user_id=session_id,
         bot_message=bot_message,
