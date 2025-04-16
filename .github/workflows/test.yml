@@ -1,0 +1,42 @@
+name: Test BookGPT Application
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          
+      - name: Install dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest
+          
+      - name: Lint with flake8
+        run: |
+          cd backend
+          pip install flake8
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # exit-zero treats all errors as warnings
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          
+      - name: Check frontend files
+        run: |
+          cd frontend
+          echo "Checking if all required frontend files exist..."
+          test -f index.html || (echo "index.html missing" && exit 1)
+          test -f script.js || (echo "script.js missing" && exit 1)
+          test -f style.css || (echo "style.css missing" && exit 1)
+          echo "All frontend files exist."

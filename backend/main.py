@@ -46,9 +46,11 @@ session_states: Dict[str, Dict[str, Any]] = {}
 
 # Configure CORS
 origins = [
-    "http://localhost",  # Add other origins if needed e.g. frontend deployment URL
+    "http://localhost",
     "http://localhost:8080",
-    "http://localhost:8081",
+    "http://localhost:8081", 
+    "https://bookgpt.vercel.app",  # Vercel deployment URL
+    "https://bookgpt-*.vercel.app",  # Preview deployments
     "null"  # Allow local file:// origin
 ]
 
@@ -70,23 +72,34 @@ async def process_nlp(text: str, current_stage: str) -> dict:
     print(f"NLP Placeholder: Processing text: '{text}' in stage: {current_stage}")
     intent = "UNKNOWN"
     entities = {}
-    # --- Simple Keyword Logic (Replace with LLM in Prompt 9/Integration) ---
-    lower_text = text.lower()
-    if any(word in lower_text for word in ["book", "recommend", "read", "suggest"]):
-        intent = "REQUEST_RECOMMENDATION"
-    elif any(word in lower_text for word in ["like", "similar", "another"]):
-        intent = "REQUEST_SIMILAR" # Could be used later
-    elif any(word in lower_text for word in ["hi", "hello", "hey"]):
-         intent = "GREETING"
+    
+    # Special case for empty messages or very short initial messages at INIT stage
+    if (not text or text.strip() == "") and current_stage == "INIT":
+        intent = "GREETING"
+        print("NLP: Empty message in INIT stage interpreted as GREETING")
+    else:
+        # --- Simple Keyword Logic (Replace with LLM in Prompt 9/Integration) ---
+        lower_text = text.lower()
+        
+        # Expanded list of recommendation keywords
+        if any(word in lower_text for word in ["book", "recommend", "read", "suggest", "mystery", "fantasy", 
+                                              "sci-fi", "fiction", "novel", "like", "books", "thriller", "genre"]):
+            intent = "REQUEST_RECOMMENDATION"
+        elif any(word in lower_text for word in ["similar", "another"]):
+            intent = "REQUEST_SIMILAR" # Could be used later
+        elif any(word in lower_text for word in ["hi", "hello", "hey"]):
+            intent = "GREETING"
 
-    # Basic entity extraction (very rudimentary)
-    if "sci-fi" in lower_text or "science fiction" in lower_text:
-        entities["genre"] = "Science Fiction"
-    if "fantasy" in lower_text:
-        entities["genre"] = "Fantasy"
-    if "thriller" in lower_text:
-        entities["genre"] = "Thriller"
-    # --- End Simple Logic ---
+        # Basic entity extraction (very rudimentary)
+        if "sci-fi" in lower_text or "science fiction" in lower_text:
+            entities["genre"] = "Science Fiction"
+        if "fantasy" in lower_text:
+            entities["genre"] = "Fantasy"
+        if "thriller" in lower_text:
+            entities["genre"] = "Thriller"
+        if "mystery" in lower_text:
+            entities["genre"] = "Mystery"
+        # --- End Simple Logic ---
 
     nlp_result = {"intent": intent, "entities": entities, "refined_message": text} # Pass original message for now
     print(f"NLP Placeholder: Mock result: {nlp_result}")
@@ -127,7 +140,16 @@ async def handle_chat(request: ChatRequest):
     if intent == "GREETING" and current_stage == "INIT":
         # Handle simple initial greeting
         bot_message = "Hi! I'm here to help you discover your next great read. How can I help? You can tell me about genres you like, authors, or a book you recently enjoyed."
-        response_suggestions = ["Suggest Fantasy Books", "Recommend Sci-Fi", "Books like The Hobbit"]
+        response_suggestions = [
+            "Suggest Fantasy Books", 
+            "Recommend Sci-Fi", 
+            "Books like The Hobbit",
+            "Mystery Novels", 
+            "Contemporary Fiction",
+            "Bestsellers This Year",
+            "Historical Fiction",
+            "Books by Female Authors"
+        ]
         user_state["stage"] = "AWAITING_PREFERENCES"
 
     elif intent == "REQUEST_RECOMMENDATION" and (current_stage == "INIT" or current_stage == "AWAITING_PREFERENCES"):
@@ -278,7 +300,8 @@ async def handle_chat(request: ChatRequest):
                                 amazon_tag = os.getenv('AMAZON_ASSOCIATE_TAG', 'bookgpt-20')  # Default tag if none set
                                 isbn = book_details.get('isbn13', '')
                                 if isbn:  # Only add link if ISBN exists
-                                    book_details["amazon_link"] = f"https://www.amazon.com/dp/{isbn}?tag={amazon_tag}"
+                                    # Use search URL instead of direct product link for better reliability
+                                    book_details["amazon_link"] = f"https://www.amazon.com/s?k={isbn}&tag={amazon_tag}"
                                 else:
                                     book_details["amazon_link"] = None  # No link if no ISBN
                                 book_results.append(book_details)
@@ -323,7 +346,16 @@ async def handle_chat(request: ChatRequest):
         elif "start" in lower_message or "reset" in lower_message or "over" in lower_message:
             user_state = {"history": [{"role": "user", "content": request.message}], "stage": "INIT", "details": {}} # Keep user message for context maybe?
             bot_message = "Let's start over! How can I help you find your next great read?"
-            response_suggestions = ["Suggest Fantasy Books", "Recommend Sci-Fi", "Books like The Hobbit"]
+            response_suggestions = [
+                "Suggest Fantasy Books", 
+                "Recommend Sci-Fi", 
+                "Books like The Hobbit",
+                "Mystery Novels", 
+                "Contemporary Fiction",
+                "Bestsellers This Year",
+                "Historical Fiction",
+                "Books by Female Authors"
+            ]
             user_state["stage"] = "AWAITING_PREFERENCES"
 
         else:
@@ -359,7 +391,8 @@ async def handle_chat(request: ChatRequest):
                                 amazon_tag = os.getenv('AMAZON_ASSOCIATE_TAG', 'bookgpt-20')
                                 isbn = book_details.get('isbn13', '')
                                 if isbn:
-                                    book_details["amazon_link"] = f"https://www.amazon.com/dp/{isbn}?tag={amazon_tag}"
+                                    # Use search URL instead of direct product link for better reliability
+                                    book_details["amazon_link"] = f"https://www.amazon.com/s?k={isbn}&tag={amazon_tag}"
                                 else:
                                     book_details["amazon_link"] = None
                                 book_results.append(book_details)
@@ -377,7 +410,13 @@ async def handle_chat(request: ChatRequest):
     else:
         # Default / Fallback for any unhandled stage/intent combination
         bot_message = "Sorry, I wasn't sure how to proceed from there. Could you clarify? You can ask for recommendations by genre, author, or similar books."
-        response_suggestions = ["Suggest Fantasy Books", "Recommend Sci-Fi"]
+        # Provide more diverse options to maintain a better chat flow
+        response_suggestions = [
+            "Suggest Fantasy Books", 
+            "Recommend Sci-Fi", 
+            "Books like The Hobbit",
+            "Popular mystery novels"
+        ]
         user_state["stage"] = "AWAITING_PREFERENCES" # Default back to expecting preferences
     
     # Prepare final response
@@ -592,4 +631,4 @@ Make sure your response is a valid parsable JSON object with a 'recommendations'
     return []  # Return empty list on error
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8005, reload=True)

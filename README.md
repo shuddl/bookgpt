@@ -80,16 +80,67 @@ The UI aims for a clean, minimalist aesthetic
 
 1. **Start Backend Server:**
    * Ensure you are in the `backend/` directory with the virtual environment activated.
-   * Run: `uvicorn main:app --reload`
-   * The API will typically be available at `http://localhost:8000`.
+   * Run: `uvicorn main:app --reload` or `python main.py`
+   * The API will typically be available at `http://localhost:8005`.
 2. **Start Frontend:**
    * Navigate to the `frontend/` directory (`cd ../frontend/`).
    * Open the `index.html` file directly in your web browser, OR use a simple local server (e.g., `python -m http.server 8081` and browse to `http://localhost:8081`).
-   * The frontend should automatically try to connect to the backend at `http://localhost:8000/api/chat` (verify URL in `script.js`).
+   * The frontend should automatically try to connect to the backend at `http://localhost:8005/api/chat` (as configured in `script.js`).
 
 ## Deployment
 
-### Option 1: Docker Deployment
+### Option 1: GitHub Deployment with GitHub Actions
+
+1. **Push your code to GitHub:**
+   * Create a repository on GitHub if you haven't already.
+   * Push your local repository to GitHub.
+
+2. **Set up GitHub Actions for Vercel deployment:**
+   * Create a `.github/workflows` directory in your project:
+     ```bash
+     mkdir -p .github/workflows
+     ```
+   * Create a GitHub Actions workflow file:
+     ```bash
+     touch .github/workflows/deploy.yml
+     ```
+   * Add the following content to `deploy.yml`:
+     ```yaml
+     name: Deploy to Vercel
+     on:
+       push:
+         branches: [main]
+     jobs:
+       deploy:
+         runs-on: ubuntu-latest
+         steps:
+           - uses: actions/checkout@v3
+           - uses: actions/setup-node@v3
+             with:
+               node-version: '18'
+           - name: Install Vercel CLI
+             run: npm install --global vercel@latest
+           - name: Deploy to Vercel
+             env:
+               VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+               VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+               VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+             run: vercel deploy --prod --token=$VERCEL_TOKEN
+     ```
+
+3. **Set up GitHub Secrets:**
+   * Go to your GitHub repository > Settings > Secrets and variables > Actions
+   * Add the following secrets:
+     * `VERCEL_TOKEN`: Your Vercel API token
+     * `VERCEL_ORG_ID`: Your Vercel organization ID
+     * `VERCEL_PROJECT_ID`: Your Vercel project ID
+
+   You can obtain these values by running `vercel login` and `vercel link` in your local terminal.
+
+4. **Set up Environment Variables in Vercel:**
+   * Add the required environment variables (`OPENAI_API_KEY`, `GOOGLE_BOOKS_API_KEY`, `AMAZON_ASSOCIATE_TAG`) in your Vercel project settings.
+
+### Option 2: Docker Deployment
 
 1. **Prerequisites:** Docker installed and running on your machine or server.
 2. **Build the Docker image:**
@@ -103,18 +154,6 @@ The UI aims for a clean, minimalist aesthetic
      * Serve the frontend files using a web server like Nginx or Apache
      * Use a static site hosting service (Netlify, GitHub Pages, etc.)
    * Make sure to update the API_URL in `script.js` to point to your deployed backend.
-
-### Option 2: Vercel Deployment
-
-1. **Prerequisites:** Vercel account, Vercel CLI installed (`npm install -g vercel`) and logged in (`vercel login`).
-2. **Deploy Command:** Run `vercel` from the **root** project directory.
-3. **Configuration:**
-   * Follow Vercel's prompts to link or create a project.
-   * **IMPORTANT:** You may need to manually configure Build & Development settings if auto-detection isn't perfect for a combined Python/Static setup.
-     * **Backend (API):** Ensure the **Root Directory** setting points to `backend/`. Vercel usually detects FastAPI and sets appropriate install/build commands (e.g., `pip install -r requirements.txt`). Verify Python version.
-     * **Frontend (Static):** Ensure the **Root Directory** setting points to `frontend/`. Set Framework Preset to `Other` or `Static`. Output directory should be `.` (relative to `frontend/`) or blank if files are directly in `frontend/`.
-4. **Environment Variables:** After the structure is deployed, navigate to your Vercel project settings online and add your `OPENAI_API_KEY`, `GOOGLE_BOOKS_API_KEY`, and `AMAZON_ASSOCIATE_TAG` as environment variables for the Production environment.
-5. **Access:** Use the URL provided by Vercel after successful deployment.
 
 ## Limitations & Next Steps
 

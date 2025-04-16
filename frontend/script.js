@@ -4,9 +4,12 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Backend API URL - adjust as needed
-    const API_URL = 'http://localhost:8000/api/chat'; // Adjust if backend runs elsewhere
-    // const API_URL = '/api/chat'; // Use relative path if deploying backend/frontend together on same domain
+    // Backend API URL - Determine environment dynamically
+    // In development, we might be on http://localhost:8081 for frontend and need to point to backend port 8005
+    // In production on Vercel, we can use relative path which gets routed via vercel.json
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const API_URL = isLocalhost ? 'http://localhost:8005/api/chat' : '/api/chat';
+    console.log(`Using API URL: ${API_URL}`); // For debugging
 
     // DOM references
     const messageList = document.getElementById('message-list');
@@ -71,24 +74,80 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} suggestionText - The text of the clicked suggestion
      */
     function handleSuggestionClick(suggestionText) {
-        const tellMoreMatch = suggestionText.match(/Tell me more about #(\d+)/i);
-
-        if (tellMoreMatch) {
-            const bookIndex = parseInt(tellMoreMatch[1], 10) - 1; // Get the index (0-based)
+        // Display the suggestion as if the user typed it
+        const userMessageElement = displayMessage(suggestionText, 'user');
+        scrollElementIntoView(userMessageElement);
+        
+        // Clear any existing inputs if there are any
+        userInput.value = '';
+        
+        // Process the suggestion based on its content
+        if (suggestionText.match(/Tell me more about #(\d+)/i)) {
+            // This is a request for more details about a specific book
+            const bookIndex = parseInt(suggestionText.match(/Tell me more about #(\d+)/i)[1], 10) - 1;
             console.log(`Requesting details for book index: ${bookIndex}`);
+        } 
+        
+        // Send all suggestions to backend - no special case filtering
+        sendMessageToBackend(suggestionText);
+    }
+
+    /**
+     * Sends a message to the backend (works for both typed messages and suggestions)
+     * @param {string} messageText - The message text to send
+     */
+    async function sendMessageToBackend(messageText) {
+        if (!messageText) return; // Don't send empty messages
+
+        console.log('Sending message to backend:', { sessionId, message: messageText });
+        showLoading(true); // Show loading indicator
+
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    user_id: sessionId,
+                    message: messageText
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ detail: "Unknown server error" }));
+                console.error('API Error Response:', errorData);
+                throw new Error(`Server error: ${response.status} ${response.statusText} - ${errorData.detail || 'No details'}`);
+            }
+
+            const data = await response.json();
             
-            // Display the suggestion as if the user typed it
-            const userMessageElement = displayMessage(suggestionText, 'user');
-            scrollElementIntoView(userMessageElement);
+            let lastAddedElement;
+
+            if (data.bot_message) {
+                lastAddedElement = displayMessage(data.bot_message, 'bot', data.suggestions || []);
+            }
             
-            // Send the suggestion to the backend with the specific book index
-            // The backend will handle displaying more details about the specific book
-            sendSuggestionToBackend(suggestionText);
-        } else {
-            // Existing logic: Display as user message and send to backend
-            const userMessageElement = displayMessage(suggestionText, 'user');
-            scrollElementIntoView(userMessageElement);
-            sendSuggestionToBackend(suggestionText);
+            if (data.books && data.books.length > 0) {
+                lastAddedElement = displayBooks(data.books);
+            }
+            
+            // If no message or books were returned, show a default response
+            if (!lastAddedElement) {
+                lastAddedElement = displayMessage("I'm looking into that for you. What other topics are you interested in?", 'bot', 
+                    ["Suggest Fantasy Books", "Recommend Sci-Fi", "Books like The Hobbit", "Mystery Novels"]);
+            }
+            
+            // Scroll to the last added element
+            scrollElementIntoView(lastAddedElement);
+
+        } catch (error) {
+            console.error('Fetch API Error:', error);
+            const errorElement = displayMessage(`Sorry, I encountered an error. Please try again.`, 'bot', 
+                ["Suggest Fantasy Books", "Recommend Sci-Fi", "Mystery Novels", "Contemporary Fiction"]);
+            scrollElementIntoView(errorElement);
+        } finally {
+            showLoading(false);
         }
     }
 
@@ -160,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
         booksContainer.classList.add('recommendations-container');
         recommendationsMessage.appendChild(booksContainer);
 
-        books.forEach(book => {
+        books.forEach((book, index) => {
             const card = document.createElement('div');
             card.classList.add('recommendation-card');
             
@@ -173,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tempDiv.innerHTML = book.description;
                 
                 // Get text content for length checking
-                const textContent = tempDiv.textContent;
+                const textContent = tempDiv.textContent || tempDiv.innerText;
                 
                 // Truncate if needed
                 if (textContent.length > 150) {
@@ -187,13 +246,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Create Amazon link with proper fallback
             let amazonLink = null;
+            
+            // First check if the book has a direct amazon_link property
             if (book.amazon_link && book.amazon_link.includes('amazon.com')) {
                 amazonLink = book.amazon_link;
-            } else if (book.isbn13) {
-                amazonLink = `https://www.amazon.com/dp/${book.isbn13}?tag=${amazonTag}`;
+            } 
+            // If we have an ISBN13, use search URL instead of direct product link
+            else if (book.isbn13) {
+                // Use search URL with ISBN which is more reliable than direct product links
+                amazonLink = `https://www.amazon.com/s?k=${book.isbn13}&tag=${amazonTag}`;
+            }
+            // If all else fails, search by title and author
+            else if (book.title) {
+                // Create a search query with title and author if available
+                let searchQuery = encodeURIComponent(book.title);
+                if (book.authors && book.authors.length > 0) {
+                    searchQuery += `+${encodeURIComponent(book.authors[0])}`;
+                }
+                amazonLink = `https://www.amazon.com/s?k=${searchQuery}&tag=${amazonTag}`;
             }
             
-            card.innerHTML = `
+            // Create the HTML content for the card
+            const cardHTML = `
                 <div class="recommendation-content">
                     ${book.thumbnail ? 
                         `<img src="${book.thumbnail}" alt="Cover of ${book.title}" class="book-cover">` : 
@@ -217,7 +291,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
             
+            card.innerHTML = cardHTML;
             booksContainer.appendChild(card);
+            
+            // Debug logging
+            console.log(`Book #${index + 1} - Title: ${book.title}, Amazon Link: ${amazonLink || 'None'}`);
         });
 
         messageList.appendChild(recommendationsMessage);
@@ -255,52 +333,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentUserInput = userInput.value; // Store value before clearing
         userInput.value = ''; // Clear input field
         adjustTextareaHeight(); // Adjust height after clearing
-        showLoading(true); // Show loading indicator
-
-        try {
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    user_id: sessionId, // Use the generated session ID
-                    message: currentUserInput // Send the stored message text
-                })
-            });
-
-            if (!response.ok) {
-                // Handle HTTP errors (like 4xx, 5xx)
-                const errorData = await response.json().catch(() => ({ detail: "Unknown server error" })); // Attempt to get error detail
-                console.error('API Error Response:', errorData);
-                throw new Error(`Server error: ${response.status} ${response.statusText} - ${errorData.detail || 'No details'}`);
-            }
-
-            const data = await response.json(); // Parse successful response
-            
-            let lastAddedElement;
-
-            // Display bot's text message with suggestions
-            if (data.bot_message) {
-                lastAddedElement = displayMessage(data.bot_message, 'bot', data.suggestions);
-            }
-
-            // Check for and display book recommendations
-            if (data.books && data.books.length > 0) {
-                lastAddedElement = displayBooks(data.books);
-            }
-            
-            // Scroll to the last added element
-            scrollElementIntoView(lastAddedElement);
-
-        } catch (error) {
-            console.error('Fetch API Error:', error);
-            // Display user-friendly error message in the chat
-            const errorElement = displayMessage(`Sorry, I encountered an error. Please try again. (${error.message})`, 'bot');
-            scrollElementIntoView(errorElement);
-        } finally {
-            showLoading(false); // Hide loading indicator regardless of success/failure
-        }
+        
+        // Use our unified message sending function
+        sendMessageToBackend(currentUserInput);
     }
 
     /**
