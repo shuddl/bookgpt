@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Book Recommender</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app-container">
+        <!-- Minimal header -->
+        <header id="app-header">
+            <h1>AI Book Recommender</h1>
+        </header>
+        
+        <!-- Main chat area -->
+        <main id="chat-area">
+            <div id="message-list">
+                <!-- Messages will be dynamically inserted here -->
+            </div>
+            
+            <!-- Loading indicator (hidden by default) -->
+            <div id="loading-indicator" class="hidden">Thinking...</div>
+        </main>
+        
+        <!-- Input section (fixed at bottom) -->
+        <section id="input-section">
+            <div id="input-wrapper">
+                <textarea id="userInput" placeholder="Ask for book recommendations..." rows="1"></textarea>
+                <button id="sendButton" aria-label="Send Message">&rarr;</button>
+            </div>
+            
+            <!-- Disclaimer text -->
+            <div id="disclaimer">
+                <p>AI recommendations powered by ChatGPT & Google Books. Links may be affiliated. This is a demo.</p>
+            </div>
+        </section>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>

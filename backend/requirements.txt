@@ -1,0 +1,6 @@
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+pydantic>=2.0
+python-dotenv>=1.0 # For API keys later
+openai>=1.0 # For ChatGPT later
+aiohttp>=3.8.0 # For async Google Books API calls later or use requests
