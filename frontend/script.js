@@ -45,8 +45,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('message', sender === 'user' ? 'user-message' : 'bot-message');
 
-        // Basic text rendering
-        messageDiv.innerText = text; // Use innerText to prevent basic HTML injection from text
+        // Create content container
+        const contentDiv = document.createElement('div');
+        contentDiv.classList.add('message-content');
+        
+        // Use innerHTML for bot messages to render HTML formatting
+        // User messages should still use innerText for security
+        if (sender === 'bot') {
+            contentDiv.innerHTML = text; // Use innerHTML for bot messages to render HTML tags
+        } else {
+            contentDiv.innerText = text; // Use innerText for user messages to prevent injection
+        }
+        
+        messageDiv.appendChild(contentDiv);
 
         // Check if there are suggestions for bot messages
         if (sender === 'bot' && suggestions && suggestions.length > 0) {

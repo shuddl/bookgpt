@@ -81,16 +81,21 @@ async def process_nlp(text: str, current_stage: str) -> dict:
         # --- Simple Keyword Logic (Replace with LLM in Prompt 9/Integration) ---
         lower_text = text.lower()
         
-        # Expanded list of recommendation keywords
+        # IMPROVED: Greatly expanded list of recommendation keywords to match more user inputs
+        # Especially from the suggestion buttons
         if any(word in lower_text for word in ["book", "recommend", "read", "suggest", "mystery", "fantasy", 
-                                              "sci-fi", "fiction", "novel", "like", "books", "thriller", "genre"]):
+                                             "sci-fi", "fiction", "novel", "like", "books", "thriller", "genre",
+                                             "bestseller", "this year", "bestsellers", "historical", "female",
+                                             "contemporary", "popular", "author", "hobbit"]):
             intent = "REQUEST_RECOMMENDATION"
+            print(f"NLP: Intent set to REQUEST_RECOMMENDATION based on keywords in: '{lower_text}'")
         elif any(word in lower_text for word in ["similar", "another"]):
             intent = "REQUEST_SIMILAR" # Could be used later
         elif any(word in lower_text for word in ["hi", "hello", "hey"]):
             intent = "GREETING"
 
         # Basic entity extraction (very rudimentary)
+        # IMPROVED: Extract more entities from button suggestions
         if "sci-fi" in lower_text or "science fiction" in lower_text:
             entities["genre"] = "Science Fiction"
         if "fantasy" in lower_text:
@@ -99,10 +104,30 @@ async def process_nlp(text: str, current_stage: str) -> dict:
             entities["genre"] = "Thriller"
         if "mystery" in lower_text:
             entities["genre"] = "Mystery"
+        if "bestseller" in lower_text or "this year" in lower_text:
+            entities["category"] = "Bestsellers"
+        if "historical" in lower_text and "fiction" in lower_text:
+            entities["genre"] = "Historical Fiction"
+        if "female" in lower_text and "author" in lower_text:
+            entities["author_attribute"] = "Female"
+        if "contemporary" in lower_text:
+            entities["genre"] = "Contemporary Fiction"
+        if "hobbit" in lower_text:
+            entities["similar_to"] = "The Hobbit"
         # --- End Simple Logic ---
+        
+        # IMPROVED: If the message exactly matches one of our suggestions, always treat it as a recommendation request
+        suggestion_options = [
+            "suggest fantasy books", "recommend sci-fi", "books like the hobbit",
+            "mystery novels", "contemporary fiction", "bestsellers this year",
+            "historical fiction", "books by female authors", "popular mystery novels"
+        ]
+        if lower_text in suggestion_options:
+            intent = "REQUEST_RECOMMENDATION"
+            print(f"NLP: Intent set to REQUEST_RECOMMENDATION based on exact match to suggestion: '{lower_text}'")
 
     nlp_result = {"intent": intent, "entities": entities, "refined_message": text} # Pass original message for now
-    print(f"NLP Placeholder: Mock result: {nlp_result}")
+    print(f"NLP Placeholder: Result: {nlp_result}")
     return nlp_result
 
 @app.get("/")
@@ -407,17 +432,94 @@ async def handle_chat(request: ChatRequest):
                 response_suggestions = ["Try Fantasy genre", "Suggest popular Sci-Fi"]
                 user_state["stage"] = "AWAITING_PREFERENCES" # Go back
 
-    else:
-        # Default / Fallback for any unhandled stage/intent combination
-        bot_message = "Sorry, I wasn't sure how to proceed from there. Could you clarify? You can ask for recommendations by genre, author, or similar books."
-        # Provide more diverse options to maintain a better chat flow
-        response_suggestions = [
-            "Suggest Fantasy Books", 
-            "Recommend Sci-Fi", 
-            "Books like The Hobbit",
-            "Popular mystery novels"
+else:
+        # IMPROVED FALLBACK LOGIC:
+        # Check if the message matches any of our common suggestion buttons
+        # This acts as a safety net in case our NLP process failed to catch the intent
+        lower_message = request.message.lower()
+        suggestion_matches = [
+            "suggest fantasy books", "recommend sci-fi", "books like the hobbit",
+            "mystery novels", "contemporary fiction", "bestsellers this year",
+            "historical fiction", "books by female authors", "popular mystery novels"
         ]
-        user_state["stage"] = "AWAITING_PREFERENCES" # Default back to expecting preferences
+        
+        if any(suggestion.lower() == lower_message for suggestion in suggestion_matches):
+            # This is a button click that our NLP missed - treat it as a recommendation request
+            print(f"Fallback logic: Recognized '{request.message}' as a suggestion button click")
+            bot_message = f"Looking for {request.message}, one moment..."
+            
+            # Extract appropriate entities based on the message
+            if "fantasy" in lower_message:
+                entities["genre"] = "Fantasy"
+            elif "sci-fi" in lower_message:
+                entities["genre"] = "Science Fiction"
+            elif "hobbit" in lower_message:
+                entities["similar_to"] = "The Hobbit"
+            elif "mystery" in lower_message:
+                entities["genre"] = "Mystery"
+            elif "contemporary" in lower_message:
+                entities["genre"] = "Contemporary Fiction"
+            elif "bestseller" in lower_message or "this year" in lower_message:
+                entities["category"] = "Bestsellers"
+            elif "historical" in lower_message:
+                entities["genre"] = "Historical Fiction"
+            elif "female" in lower_message and "author" in lower_message:
+                entities["author_attribute"] = "Female"
+                
+            # Process as a recommendation request with the extracted entity
+            user_state["details"]["preferences_text"] = request.message
+            user_state["details"]["nlp_entities"] = entities
+            
+            # Call ChatGPT for book recommendations
+            # Call ChatGPT for new recommendations
+            recommendation_ideas = await get_chatgpt_recommendations(
+                preferences=entities or {"raw_query": request.message},
+                history=user_state["history"],
+                max_recommendations=5
+            )
+            
+            book_results = []
+            
+            # Process recommendation ideas
+            if recommendation_ideas:
+                for idea in recommendation_ideas:
+                    search_query = f"{idea.get('title', '')} {idea.get('author', '')}"
+                    search_results = await search_google_books(query=search_query.strip(), max_results=1)
+                    
+                    if search_results:
+                        book_id = search_results[0].get("id")
+                        if book_id:
+                            book_details = await get_book_details_by_id(book_id)
+                            if book_details:
+                                book_details["reasoning"] = idea.get("reasoning", "No specific reason provided.")
+                                amazon_tag = os.getenv('AMAZON_ASSOCIATE_TAG', 'bookgpt-20')
+                                isbn = book_details.get('isbn13', '')
+                                if isbn:
+                                    book_details["amazon_link"] = f"https://www.amazon.com/s?k={isbn}&tag={amazon_tag}"
+                                else:
+                                    book_details["amazon_link"] = None
+                                book_results.append(book_details)
+            
+            if book_results:
+                bot_message = f"Here are some {request.message} that you might enjoy:"
+                user_state["details"]["last_recommendations"] = book_results
+                response_suggestions = ["Tell me more about #1", "Show different recommendations", "Start Over"]
+                user_state["stage"] = "SHOWING_RECOMMENDATIONS"
+            else:
+                bot_message = f"I'm sorry, I couldn't find specific {request.message} at the moment. Could you try another category?"
+                response_suggestions = ["Fantasy Books", "Mystery Novels", "Books by Female Authors"]
+                user_state["stage"] = "AWAITING_PREFERENCES"
+        else:
+            # Default / Real Fallback for any unhandled stage/intent combination
+            bot_message = "Sorry, I wasn't sure how to proceed from there. Could you clarify? You can ask for recommendations by genre, author, or similar books."
+            # Provide more diverse options to maintain a better chat flow
+            response_suggestions = [
+                "Suggest Fantasy Books", 
+                "Recommend Sci-Fi", 
+                "Books like The Hobbit",
+                "Popular mystery novels"
+            ]
+            user_state["stage"] = "AWAITING_PREFERENCES" # Default back to expecting preferences
     
     # Prepare final response
     final_books_data = user_state["details"].get("last_recommendations", []) if user_state["stage"] == "SHOWING_RECOMMENDATIONS" else []

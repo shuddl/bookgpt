@@ -76,7 +76,7 @@ body {
   animation: fadeIn 0.3s ease-in-out;
   position: relative;
   word-wrap: break-word; /* Ensure text wraps properly */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04); /* Subtle shadow for depth */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08); /* Increased shadow for depth */
 }
 
 @keyframes fadeIn {
@@ -86,17 +86,34 @@ body {
 
 .user-message {
   align-self: flex-end;
-  background-color: #eef2ff;
-  color: #202123;
+  background-color: #3b82f6; /* Bright blue background */
+  color: #ffffff; /* White text for contrast */
   margin-left: auto; /* Push user messages to the right */
+  font-weight: 500;
 }
 
 .bot-message {
   align-self: flex-start;
-  background-color: #f7f7f8;
+  background-color: #f0f0f0; /* Darker gray for bot messages */
   color: #202123;
-  border: 1px solid #eaeaef;
+  border: 1px solid #e0e0e0; /* Slightly darker border */
   margin-right: auto; /* Push bot messages to the left */
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.06); /* Slightly stronger shadow */
+}
+
+/* Message content styling */
+.message-content {
+  width: 100%;
+}
+
+/* Style links in bot messages */
+.bot-message a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.bot-message a:hover {
+  text-decoration: none;
 }
 
 /* Recommendation Cards */
