@@ -1,0 +1,14 @@
+{
+  "name": "bookgpt",
+  "version": "1.0.0",
+  "description": "AI Book Recommender Application",
+  "main": "frontend/index.html",
+  "scripts": {
+    "start": "python backend/main.py"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "author": "",
+  "license": "ISC"
+}
