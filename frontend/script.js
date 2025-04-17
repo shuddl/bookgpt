@@ -7,6 +7,87 @@
     // Generate a unique session ID for this conversation
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     console.log(`Session ID: ${sessionId}`);
+    
+    // Initialize Web Worker immediately at script evaluation time
+    let worker = null;
+    
+    // Create and initialize the worker synchronously during initial script execution
+    function initializeWorker() {
+        try {
+            worker = new Worker('./worker.js');
+            
+            // IMPORTANT: Add message listener immediately during initialization
+            // This prevents the "Event handler of 'message' event must be added on initial evaluation" warning
+            worker.addEventListener('message', handleWorkerMessage);
+            
+            console.log('Web Worker initialized successfully');
+        } catch (error) {
+            console.error('Failed to initialize Web Worker:', error);
+            worker = null;
+        }
+    }
+    
+    // Initialize worker immediately during script evaluation
+    initializeWorker();
+    
+    /**
+     * Handle messages received from the Web Worker
+     * @param {MessageEvent} e - The message event from the worker
+     */
+    function handleWorkerMessage(e) {
+        const data = e.data;
+        
+        switch (data.type) {
+            case 'message_processed':
+                console.log('Worker processed message:', data.result);
+                break;
+                
+            case 'recommendations_result':
+                console.log('Received book recommendations from worker:', data.books);
+                // You could use these recommendations in the UI
+                break;
+                
+            case 'analytics_tracked':
+                console.log('Analytics tracking confirmed:', data.success);
+                break;
+                
+            case 'error':
+                console.error('Worker error:', data.error);
+                break;
+                
+            default:
+                console.warn('Unknown message from worker:', data);
+        }
+    }
+    
+    /**
+     * Send a message to the worker for processing
+     * @param {string} message - The message to process
+     */
+    function processMessageInWorker(message) {
+        if (worker) {
+            worker.postMessage({
+                type: 'process_message',
+                message: message
+            });
+        }
+    }
+    
+    /**
+     * Send an analytics event to the worker for tracking
+     * @param {Object} event - The event data to track
+     */
+    function trackAnalyticsEvent(event) {
+        if (worker) {
+            worker.postMessage({
+                type: 'track_analytics',
+                event: event
+            });
+        } else {
+            // Fallback if worker isn't available
+            console.log('Analytics event (fallback):', event);
+        }
+    }
 
     // CSS Styles (from style.css) - Updated selectors for widget IDs
     const cssStyles = `
@@ -442,8 +523,19 @@
 
         console.log('Sending message to backend:', { sessionId, message: messageText });
         showLoading(true);
+        
+        // Track this interaction in the worker for analytics
+        trackAnalyticsEvent({
+            type: 'user_message',
+            sessionId: sessionId,
+            message: messageText,
+            timestamp: new Date().toISOString()
+        });
 
         try {
+            // Also process message in worker (for any background tasks)
+            processMessageInWorker(messageText);
+            
             const response = await fetch(API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

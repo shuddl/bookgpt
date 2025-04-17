@@ -3,14 +3,10 @@
   "builds": [
     {
       "src": "backend/main.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "15mb",
-        "runtime": "python3.9"
-      }
+      "use": "@vercel/python"
     },
     {
-      "src": "frontend/script.js",
+      "src": "frontend/**/*",
       "use": "@vercel/static"
     }
   ],
@@ -20,8 +16,30 @@
       "dest": "backend/main.py"
     },
     {
+      "src": "/",
+      "dest": "frontend/index.html"
+    },
+    {
       "src": "/script.js",
-      "dest": "/frontend/script.js"
+      "dest": "frontend/script.js"
+    },
+    {
+      "src": "/worker.js",
+      "dest": "frontend/worker.js"
+    },
+    {
+      "src": "/style.css",
+      "dest": "frontend/style.css"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "frontend/$1"
     }
-  ]
+  ],
+  "env": {
+    "OPENAI_API_KEY": "@openai_api_key",
+    "GOOGLE_BOOKS_API_KEY": "@google_books_api_key",
+    "WEBHOOK_SECRET": "@webhook_secret",
+    "AMAZON_ASSOCIATE_TAG": "@amazon_associate_tag"
+  }
 }

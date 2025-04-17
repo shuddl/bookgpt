@@ -15,15 +15,52 @@
         // Session ID for this user
         sessionId: '',
         
+        // Worker instance
+        worker: null,
+        
         // Initialize tracking
         init: function() {
             // Generate or retrieve session ID
             this.sessionId = this.getSessionId();
             
+            // Initialize Web Worker (do this before setup event listeners)
+            this.initializeWorker();
+            
             // Setup event listeners
             this.setupEventListeners();
             
             console.log('BookGPT Tracking initialized with session ID: ' + this.sessionId);
+        },
+        
+        // Initialize the Web Worker correctly
+        initializeWorker: function() {
+            try {
+                // Create worker
+                this.worker = new Worker(bookgpt_tracking.worker_url || './worker.js');
+                
+                // IMPORTANT: Add the message event listener IMMEDIATELY during the initial script evaluation
+                // This prevents the "Event handler of 'message' event must be added on initial evaluation" warning
+                if (this.worker) {
+                    this.worker.addEventListener('message', this.handleWorkerMessage);
+                    console.log('BookGPT Tracking Worker initialized successfully');
+                }
+            } catch(error) {
+                console.error('Failed to initialize tracking worker:', error);
+                this.worker = null;
+            }
+        },
+        
+        // Handle messages from the worker
+        handleWorkerMessage: function(e) {
+            var data = e.data;
+            switch (data.type) {
+                case 'analytics_tracked':
+                    console.log('Analytics event tracked successfully');
+                    break;
+                case 'error':
+                    console.error('Worker error:', data.error);
+                    break;
+            }
         },
         
         // Generate a unique session ID or retrieve from storage
@@ -84,6 +121,18 @@
         
         // Track a chat interaction
         trackChatInteraction: function(data) {
+            // If worker is available, use it for tracking
+            if (this.worker) {
+                this.worker.postMessage({
+                    type: 'track_event',
+                    eventType: 'chat_interaction',
+                    data: data,
+                    sessionId: this.sessionId
+                });
+                return;
+            }
+            
+            // Fallback to regular AJAX if worker isn't available
             var payload = {
                 action: 'bookgpt_track_event',
                 nonce: bookgpt_tracking.nonce,
