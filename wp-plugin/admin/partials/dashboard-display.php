@@ -112,6 +112,41 @@ if (!defined('WPINC')) {
                     </div>
                 </div>
             </div>
+
+            <!-- Chat Bot Pros -->
+            <div class="bookgpt-card">
+                <div class="bookgpt-card-header">
+                    <h2><?php _e('Chat Bot Pros', 'bookgpt-wp'); ?></h2>
+                </div>
+                <div class="bookgpt-card-content">
+                    <div class="bookgpt-stat-grid">
+                        <div class="bookgpt-stat">
+                            <h3><?php echo absint($total_chat_bots); ?></h3>
+                            <p><?php _e('Total Chat Bots', 'bookgpt-wp'); ?></p>
+                        </div>
+                        <div class="bookgpt-stat">
+                            <h3><?php echo absint($active_chat_bots); ?></h3>
+                            <p><?php _e('Active Chat Bots', 'bookgpt-wp'); ?></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bookgpt-card-footer">
+                    <a href="<?php echo admin_url('admin.php?page=bookgpt-chat-bot-pros'); ?>"><?php _e('Manage Chat Bot Pros →', 'bookgpt-wp'); ?></a>
+                </div>
+            </div>
+
+            <!-- Prompt Amplifier -->
+            <div class="bookgpt-card">
+                <div class="bookgpt-card-header">
+                    <h2><?php _e('Prompt Amplifier', 'bookgpt-wp'); ?></h2>
+                </div>
+                <div class="bookgpt-card-content">
+                    <p><?php _e('Enhance your prompts for better responses.', 'bookgpt-wp'); ?></p>
+                </div>
+                <div class="bookgpt-card-footer">
+                    <a href="<?php echo admin_url('admin.php?page=bookgpt-prompt-amplifier'); ?>"><?php _e('Generate Prompt Amplifier →', 'bookgpt-wp'); ?></a>
+                </div>
+            </div>
         </div>
     </div>
 </div>
