@@ -166,6 +166,38 @@ class BookGPT_Admin {
             'bookgpt-settings',
             'bookgpt_appearance_settings'
         );
+
+        add_settings_field(
+            'chat_widget_width',
+            __('Widget Width', 'bookgpt-wp'),
+            array($this, 'chat_widget_width_callback'),
+            'bookgpt-settings',
+            'bookgpt_appearance_settings'
+        );
+
+        add_settings_field(
+            'chat_widget_height',
+            __('Widget Height', 'bookgpt-wp'),
+            array($this, 'chat_widget_height_callback'),
+            'bookgpt-settings',
+            'bookgpt_appearance_settings'
+        );
+
+        add_settings_field(
+            'chat_font_size',
+            __('Font Size', 'bookgpt-wp'),
+            array($this, 'chat_font_size_callback'),
+            'bookgpt-settings',
+            'bookgpt_appearance_settings'
+        );
+
+        add_settings_field(
+            'custom_css',
+            __('Custom CSS', 'bookgpt-wp'),
+            array($this, 'custom_css_callback'),
+            'bookgpt-settings',
+            'bookgpt_appearance_settings'
+        );
         
         // Affiliate Settings
         add_settings_section(
@@ -304,6 +336,50 @@ class BookGPT_Admin {
         $options = get_option('bookgpt_options');
         ?>
         <input type='color' name='bookgpt_options[chat_widget_color]' value='<?php echo esc_attr($options['chat_widget_color'] ?? '#3b82f6'); ?>'>
+        <?php
+    }
+
+    /**
+     * Chat Widget Width field callback
+     */
+    public function chat_widget_width_callback() {
+        $options = get_option('bookgpt_options');
+        ?>
+        <input type='range' name='bookgpt_options[chat_widget_width]' min='300' max='500' step='10' value='<?php echo esc_attr($options['chat_widget_width'] ?? '350'); ?>' id='width-slider'>
+        <span id='width-value'><?php echo esc_html($options['chat_widget_width'] ?? '350'); ?>px</span>
+        <?php
+    }
+
+    /**
+     * Chat Widget Height field callback
+     */
+    public function chat_widget_height_callback() {
+        $options = get_option('bookgpt_options');
+        ?>
+        <input type='range' name='bookgpt_options[chat_widget_height]' min='400' max='700' step='10' value='<?php echo esc_attr($options['chat_widget_height'] ?? '500'); ?>' id='height-slider'>
+        <span id='height-value'><?php echo esc_html($options['chat_widget_height'] ?? '500'); ?>px</span>
+        <?php
+    }
+
+    /**
+     * Chat Font Size field callback
+     */
+    public function chat_font_size_callback() {
+        $options = get_option('bookgpt_options');
+        ?>
+        <input type='range' name='bookgpt_options[chat_font_size]' min='12' max='18' step='1' value='<?php echo esc_attr($options['chat_font_size'] ?? '14'); ?>' id='font-slider'>
+        <span id='font-value'><?php echo esc_html($options['chat_font_size'] ?? '14'); ?>px</span>
+        <?php
+    }
+
+    /**
+     * Custom CSS field callback
+     */
+    public function custom_css_callback() {
+        $options = get_option('bookgpt_options');
+        ?>
+        <textarea name='bookgpt_options[custom_css]' class='large-text code' rows='5'><?php echo esc_textarea($options['custom_css'] ?? ''); ?></textarea>
+        <p class="description"><?php _e('Add custom CSS styles to customize the widget appearance further.', 'bookgpt-wp'); ?></p>
         <?php
     }
     

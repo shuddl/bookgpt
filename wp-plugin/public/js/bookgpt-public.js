@@ -98,4 +98,27 @@
             }
         });
     }
+
+    /**
+     * Initialize the widget form of the AI chat
+     */
+    function initializeWidgetForm() {
+        // Check if the widget container already exists
+        if (document.getElementById('book-chat-widget-container')) {
+            console.log('Widget form already initialized.');
+            return;
+        }
+
+        // Create the widget container
+        const widgetContainer = document.createElement('div');
+        widgetContainer.id = 'book-chat-widget-container';
+        document.body.appendChild(widgetContainer);
+
+        // Initialize the chat widget
+        initializeBookChatWidget();
+    }
+
+    // Call the new widget initialization function
+    initializeWidgetForm();
+
 })(jQuery);
