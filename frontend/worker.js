@@ -39,13 +39,42 @@ self.addEventListener('message', function(e) {
  * @param {string} message - The message to process
  */
 function processMessage(message) {
-  // Simulate processing delay
-  setTimeout(() => {
-    self.postMessage({
-      type: 'message_processed',
-      result: `Processed: ${message}`
-    });
-  }, 100);
+  // Simple background processing example
+  const result = {
+    processed: true,
+    length: message.length,
+    keywords: extractKeywords(message)
+  };
+  
+  // Send result back to main thread
+  self.postMessage({
+    type: 'message_processed',
+    result: result
+  });
+}
+
+/**
+ * Extract potential keywords from a message
+ * @param {string} message - The message to analyze
+ * @returns {Array} - Extracted keywords
+ */
+function extractKeywords(message) {
+  const text = message.toLowerCase();
+  const keywords = [];
+  
+  const genreKeywords = [
+    'fantasy', 'sci-fi', 'science fiction', 'mystery', 'thriller',
+    'horror', 'romance', 'historical', 'fiction', 'non-fiction',
+    'biography', 'autobiography', 'young adult', 'children'
+  ];
+  
+  genreKeywords.forEach(keyword => {
+    if (text.includes(keyword)) {
+      keywords.push(keyword);
+    }
+  });
+  
+  return keywords;
 }
 
 /**
@@ -71,12 +100,39 @@ function fetchRecommendations(query) {
  * @param {Object} event - The event data to track
  */
 function trackAnalytics(event) {
-  // Simulate sending analytics
-  console.log('Worker tracking event:', event);
-  self.postMessage({
-    type: 'analytics_tracked',
-    success: true
-  });
+  try {
+    // Determine where to send the analytics
+    let analyticsEndpoint = '';
+    
+    // Check if we're in WordPress context (via bookGptConfig global)
+    if (self.bookGptConfig && self.bookGptConfig.analyticsUrl) {
+      analyticsEndpoint = self.bookGptConfig.analyticsUrl;
+    } else {
+      // Default to standard endpoint - would be configured in a real app
+      analyticsEndpoint = '/api/track'; // This would be your analytics endpoint
+    }
+    
+    // For now, just log the event
+    console.log('Would track analytics event:', event);
+    
+    // In a real implementation, we would send this data to the server
+    // fetch(analyticsEndpoint, {
+    //     method: 'POST', 
+    //     headers: {'Content-Type': 'application/json'},
+    //     body: JSON.stringify(event)
+    // });
+    
+    self.postMessage({
+      type: 'analytics_tracked',
+      success: true,
+      event: event
+    });
+  } catch (error) {
+    self.postMessage({
+      type: 'error',
+      error: `Analytics error: ${error.message}`
+    });
+  }
 }
 
 // Log worker initialization

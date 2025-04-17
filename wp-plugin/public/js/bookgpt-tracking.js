@@ -1,337 +1,206 @@
 /**
- * BookGPT Tracking Script
- * Handles tracking of user interactions with the chat widget and affiliate link conversions
+ * BookGPT Analytics Tracking Script
+ * Handles tracking book recommendations, interactions, and conversions
  */
 (function($) {
     'use strict';
-
-    // Initialize tracking when DOM is ready
+    
+    // Store click handlers to avoid duplicates
+    const trackingHandlers = {};
+    
     $(document).ready(function() {
-        BookGPTTracking.init();
+        // Initialize tracking after a delay to ensure the widget is loaded
+        setTimeout(initializeTracking, 2000);
     });
-
-    // Main tracking object
-    var BookGPTTracking = {
-        // Session ID for this user
-        sessionId: '',
-        
-        // Worker instance
-        worker: null,
-        
-        // Initialize tracking
-        init: function() {
-            // Generate or retrieve session ID
-            this.sessionId = this.getSessionId();
-            
-            // Initialize Web Worker (do this before setup event listeners)
-            this.initializeWorker();
-            
-            // Setup event listeners
-            this.setupEventListeners();
-            
-            console.log('BookGPT Tracking initialized with session ID: ' + this.sessionId);
-        },
-        
-        // Initialize the Web Worker correctly
-        initializeWorker: function() {
-            try {
-                // Create worker
-                this.worker = new Worker(bookgpt_tracking.worker_url || './worker.js');
-                
-                // IMPORTANT: Add the message event listener IMMEDIATELY during the initial script evaluation
-                // This prevents the "Event handler of 'message' event must be added on initial evaluation" warning
-                if (this.worker) {
-                    this.worker.addEventListener('message', this.handleWorkerMessage);
-                    console.log('BookGPT Tracking Worker initialized successfully');
-                }
-            } catch(error) {
-                console.error('Failed to initialize tracking worker:', error);
-                this.worker = null;
-            }
-        },
-        
-        // Handle messages from the worker
-        handleWorkerMessage: function(e) {
-            var data = e.data;
-            switch (data.type) {
-                case 'analytics_tracked':
-                    console.log('Analytics event tracked successfully');
-                    break;
-                case 'error':
-                    console.error('Worker error:', data.error);
-                    break;
-            }
-        },
-        
-        // Generate a unique session ID or retrieve from storage
-        getSessionId: function() {
-            // Try to get from sessionStorage first
-            var sessionId = sessionStorage.getItem('bookgpt_session_id');
-            
-            // If not found, create a new one
-            if (!sessionId) {
-                sessionId = 'session_' + this.generateUniqueId();
-                sessionStorage.setItem('bookgpt_session_id', sessionId);
-            }
-            
-            return sessionId;
-        },
-        
-        // Generate a unique ID
-        generateUniqueId: function() {
-            return Date.now().toString(36) + Math.random().toString(36).substring(2);
-        },
-        
-        // Setup event listeners for tracking
-        setupEventListeners: function() {
-            var self = this;
-            
-            // Listen for chat interactions from the widget
-            $(window).on('bookgpt_chat_interaction', function(event, data) {
-                self.trackChatInteraction(data);
-            });
-            
-            // Listen for book recommendations from the widget
-            $(window).on('bookgpt_book_recommendation', function(event, data) {
-                self.trackBookRecommendation(data);
-            });
-            
-            // Track clicks on Amazon affiliate links
-            $(document).on('click', '.widget-book-link, a[href*="amazon.com"]', function(e) {
-                var $link = $(this);
-                var bookTitle = $link.data('book-title') || $link.closest('.widget-recommendation-card').find('.widget-book-title').text() || '';
-                var bookAuthor = $link.data('book-author') || $link.closest('.widget-recommendation-card').find('.widget-book-author').text() || '';
-                var bookISBN = $link.data('book-isbn') || '';
-                var amazonId = $link.attr('href').match(/\/([A-Z0-9]{10})($|\?|\/)/) ? $link.attr('href').match(/\/([A-Z0-9]{10})($|\?|\/)/)[1] : '';
-                
-                self.trackAffiliateClick({
-                    book_title: bookTitle,
-                    book_author: bookAuthor.replace('by ', ''),
-                    book_isbn: bookISBN,
-                    amazon_id: amazonId
-                });
-                
-                // Store click data in localStorage for purchase tracking
-                self.storeClickData(bookTitle, amazonId);
-            });
-            
-            // Check for purchase completion on page load
-            this.checkPurchaseCompletion();
-        },
-        
-        // Track a chat interaction
-        trackChatInteraction: function(data) {
-            // If worker is available, use it for tracking
-            if (this.worker) {
-                this.worker.postMessage({
-                    type: 'track_event',
-                    eventType: 'chat_interaction',
-                    data: data,
-                    sessionId: this.sessionId
-                });
-                return;
-            }
-            
-            // Fallback to regular AJAX if worker isn't available
-            var payload = {
-                action: 'bookgpt_track_event',
-                nonce: bookgpt_tracking.nonce,
-                session_id: this.sessionId,
-                user_input: data.userMessage || '',
-                bot_response: data.botResponse || '',
-                book_title: data.bookTitle || '',
-                book_author: data.bookAuthor || '',
-                book_isbn: data.bookISBN || ''
-            };
-            
-            $.post(bookgpt_tracking.ajax_url, payload);
-        },
-        
-        // Track a book recommendation
-        trackBookRecommendation: function(data) {
-            var books = data.books || [];
-            var self = this;
-            
-            // Track each recommended book
-            books.forEach(function(book) {
-                var payload = {
-                    action: 'bookgpt_track_event',
-                    nonce: bookgpt_tracking.nonce,
-                    session_id: self.sessionId,
-                    user_input: data.userQuery || '',
-                    bot_response: 'Book recommendation',
-                    book_title: book.title || '',
-                    book_author: book.author || '',
-                    book_isbn: book.isbn || ''
-                };
-                
-                $.post(bookgpt_tracking.ajax_url, payload);
-            });
-        },
-        
-        // Track an affiliate link click
-        trackAffiliateClick: function(data) {
-            var payload = {
-                action: 'bookgpt_track_conversion',
-                nonce: bookgpt_tracking.nonce,
-                session_id: this.sessionId,
-                book_title: data.book_title || '',
-                book_author: data.book_author || '',
-                book_isbn: data.book_isbn || '',
-                amazon_id: data.amazon_id || '',
-                conversion_type: 'click',
-                value: 0
-            };
-            
-            $.post(bookgpt_tracking.ajax_url, payload);
-        },
-        
-        // Store click data for later purchase tracking
-        storeClickData: function(bookTitle, amazonId) {
-            if (!bookTitle || !amazonId) {
-                return;
-            }
-            
-            var clickTime = new Date().getTime();
-            var clickData = {
-                book_title: bookTitle,
-                amazon_id: amazonId,
-                timestamp: clickTime,
-                session_id: this.sessionId
-            };
-            
-            // Store in localStorage
-            localStorage.setItem('bookgpt_last_click', JSON.stringify(clickData));
-            
-            // Set cookie for cross-domain tracking (Amazon to this site)
-            this.setCookie('bookgpt_click_id', amazonId, 30);
-            this.setCookie('bookgpt_click_book', encodeURIComponent(bookTitle), 30);
-            this.setCookie('bookgpt_click_session', this.sessionId, 30);
-        },
-        
-        // Check if this is a purchase completion page
-        checkPurchaseCompletion: function() {
-            // Look for Amazon purchase thank you page indicators
-            var isPurchasePage = window.location.href.indexOf('thank-you') > -1 || 
-                                 window.location.href.indexOf('order-confirmation') > -1 ||
-                                 $('h1:contains("Thank you for your purchase")').length > 0;
-                                 
-            // Check for Amazon order confirmation page
-            if (window.location.href.indexOf('amazon.com') > -1 && 
-                (window.location.href.indexOf('/gp/buy/thankyou') > -1 || 
-                 $('h1:contains("Thank you")').length > 0)) {
-                isPurchasePage = true;
-            }
-            
-            if (isPurchasePage) {
-                this.processPurchaseCompletion();
-            }
-        },
-        
-        // Process purchase completion
-        processPurchaseCompletion: function() {
-            // Get last click data
-            var lastClickData = localStorage.getItem('bookgpt_last_click');
-            
-            if (!lastClickData) {
-                // Check cookies as fallback
-                var amazonId = this.getCookie('bookgpt_click_id');
-                var bookTitle = this.getCookie('bookgpt_click_book');
-                var sessionId = this.getCookie('bookgpt_click_session');
-                
-                if (amazonId && bookTitle) {
-                    lastClickData = {
-                        amazon_id: amazonId,
-                        book_title: decodeURIComponent(bookTitle),
-                        session_id: sessionId || this.sessionId
-                    };
-                } else {
-                    return; // No data to track
-                }
-            } else {
-                lastClickData = JSON.parse(lastClickData);
-            }
-            
-            // Check if purchase already tracked
-            if (localStorage.getItem('bookgpt_purchase_tracked_' + lastClickData.amazon_id)) {
-                return; // Don't track duplicate purchases
-            }
-            
-            // Track the purchase conversion
-            var payload = {
-                action: 'bookgpt_track_conversion',
-                nonce: bookgpt_tracking.nonce,
-                session_id: lastClickData.session_id || this.sessionId,
-                book_title: lastClickData.book_title || '',
-                amazon_id: lastClickData.amazon_id || '',
-                conversion_type: 'purchase',
-                value: this.estimatePurchaseValue(lastClickData.book_title)
-            };
-            
-            $.post(bookgpt_tracking.ajax_url, payload);
-            
-            // Mark as tracked to prevent duplicates
-            localStorage.setItem('bookgpt_purchase_tracked_' + lastClickData.amazon_id, 'true');
-        },
-        
-        // Estimate purchase value based on book genre/title
-        estimatePurchaseValue: function(bookTitle) {
-            // Default values by book type (estimated revenue after Amazon's cut)
-            var defaultValue = 2.00;  // Default commission for books
-            var kindleValue = 0.70;   // Kindle books typically less
-            var hardcoverValue = 3.50; // Hardcovers typically more
-            
-            // Very basic estimation logic
-            if (!bookTitle) {
-                return defaultValue;
-            }
-            
-            var lowerTitle = bookTitle.toLowerCase();
-            
-            if (lowerTitle.indexOf('kindle') > -1 || lowerTitle.indexOf('ebook') > -1) {
-                return kindleValue;
-            } else if (lowerTitle.indexOf('hardcover') > -1 || lowerTitle.indexOf('hardback') > -1) {
-                return hardcoverValue;
-            }
-            
-            return defaultValue;
-        },
-        
-        // Helper: Set cookie
-        setCookie: function(name, value, days) {
-            var expires = '';
-            
-            if (days) {
-                var date = new Date();
-                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-                expires = '; expires=' + date.toUTCString();
-            }
-            
-            document.cookie = name + '=' + value + expires + '; path=/; SameSite=Lax';
-        },
-        
-        // Helper: Get cookie
-        getCookie: function(name) {
-            var nameEQ = name + '=';
-            var ca = document.cookie.split(';');
-            
-            for (var i = 0; i < ca.length; i++) {
-                var c = ca[i];
-                while (c.charAt(0) === ' ') {
-                    c = c.substring(1, c.length);
-                }
-                if (c.indexOf(nameEQ) === 0) {
-                    return c.substring(nameEQ.length, c.length);
-                }
-            }
-            
-            return null;
-        },
-        
-        // Helper: Delete cookie
-        deleteCookie: function(name) {
-            this.setCookie(name, '', -1);
+    
+    /**
+     * Initialize analytics tracking
+     */
+    function initializeTracking() {
+        // Check if analytics are enabled
+        if (!window.bookGptConfig || !window.bookGptConfig.enableAnalytics) {
+            console.log('BookGPT: Analytics tracking disabled');
+            return;
         }
-    };
-
+        
+        // Track page view
+        trackEvent({
+            type: 'page_view',
+            page: window.location.href,
+            title: document.title
+        });
+        
+        // Track widget interactions
+        attachChatInteractionTrackers();
+        
+        // Track book clicks
+        attachBookClickTrackers();
+        
+        console.log('BookGPT: Analytics tracking initialized');
+    }
+    
+    /**
+     * Attach event handlers to track chat interactions
+     */
+    function attachChatInteractionTrackers() {
+        const widgetContainer = document.getElementById('book-chat-widget-container');
+        if (!widgetContainer) {
+            // Widget not yet initialized, try again later
+            setTimeout(attachChatInteractionTrackers, 1000);
+            return;
+        }
+        
+        // Track send button clicks
+        const sendButton = widgetContainer.querySelector('#widget-send-button');
+        if (sendButton && !trackingHandlers.sendButton) {
+            trackingHandlers.sendButton = true;
+            sendButton.addEventListener('click', function() {
+                const messageInput = widgetContainer.querySelector('#widget-user-input');
+                if (messageInput && messageInput.value.trim()) {
+                    trackEvent({
+                        type: 'user_message',
+                        content_length: messageInput.value.trim().length,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            });
+        }
+        
+        // Track suggestion button clicks
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.addedNodes.length) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === 1) { // Element node
+                            // Check for newly added suggestion buttons
+                            const suggestionButtons = node.querySelectorAll('.widget-suggestion-button');
+                            suggestionButtons.forEach(function(button) {
+                                if (!button.hasAttribute('data-tracking')) {
+                                    button.setAttribute('data-tracking', 'true');
+                                    button.addEventListener('click', function() {
+                                        trackEvent({
+                                            type: 'suggestion_click',
+                                            suggestion: button.textContent,
+                                            timestamp: new Date().toISOString()
+                                        });
+                                    });
+                                }
+                            });
+                            
+                            // Check for book links
+                            const bookLinks = node.querySelectorAll('.widget-book-link');
+                            bookLinks.forEach(function(link) {
+                                if (!link.hasAttribute('data-tracking')) {
+                                    link.setAttribute('data-tracking', 'true');
+                                    link.addEventListener('click', function(e) {
+                                        const bookTitle = link.closest('.widget-recommendation-card')?.querySelector('.widget-book-title')?.textContent || 'Unknown Book';
+                                        const bookAuthor = link.closest('.widget-recommendation-card')?.querySelector('.widget-book-author')?.textContent || 'Unknown Author';
+                                        
+                                        trackConversion({
+                                            type: 'book_click',
+                                            book_title: bookTitle,
+                                            book_author: bookAuthor,
+                                            amazon_link: link.href,
+                                            timestamp: new Date().toISOString()
+                                        });
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        });
+        
+        // Start observing the widget for changes
+        observer.observe(widgetContainer, { 
+            childList: true, 
+            subtree: true 
+        });
+    }
+    
+    /**
+     * Attach click trackers to book recommendation links
+     */
+    function attachBookClickTrackers() {
+        // This is already handled by the mutation observer in attachChatInteractionTrackers
+    }
+    
+    /**
+     * Track an event via AJAX to WordPress
+     * @param {Object} eventData - The event data to track
+     */
+    function trackEvent(eventData) {
+        // Add session ID and page info
+        eventData.session_id = getSessionId();
+        eventData.page_url = window.location.href;
+        eventData.referrer = document.referrer || null;
+        
+        // Send event to WordPress via AJAX
+        $.ajax({
+            url: window.bookGptConfig.analyticsUrl,
+            method: 'POST',
+            data: {
+                action: 'bookgpt_track_analytics',
+                nonce: window.bookGptConfig.nonce,
+                event_data: JSON.stringify(eventData)
+            },
+            success: function(response) {
+                if (response.success) {
+                    console.log('BookGPT: Event tracked successfully');
+                } else {
+                    console.error('BookGPT: Failed to track event', response);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('BookGPT: Error tracking event', error);
+            }
+        });
+    }
+    
+    /**
+     * Track a conversion event (like a book click)
+     * @param {Object} conversionData - The conversion data
+     */
+    function trackConversion(conversionData) {
+        // Add session ID and page info
+        conversionData.session_id = getSessionId();
+        conversionData.page_url = window.location.href;
+        
+        // Send conversion to WordPress via AJAX
+        $.ajax({
+            url: window.bookGptConfig.analyticsUrl,
+            method: 'POST',
+            data: {
+                action: 'bookgpt_track_conversion',
+                nonce: window.bookGptConfig.nonce,
+                conversion_data: JSON.stringify(conversionData)
+            },
+            success: function(response) {
+                if (response.success) {
+                    console.log('BookGPT: Conversion tracked successfully');
+                } else {
+                    console.error('BookGPT: Failed to track conversion', response);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('BookGPT: Error tracking conversion', error);
+            }
+        });
+    }
+    
+    /**
+     * Get or create a session ID for tracking
+     * @returns {string} - The session ID
+     */
+    function getSessionId() {
+        let sessionId = sessionStorage.getItem('bookgpt_session_id');
+        
+        if (!sessionId) {
+            sessionId = 'wp_session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+            sessionStorage.setItem('bookgpt_session_id', sessionId);
+        }
+        
+        return sessionId;
+    }
 })(jQuery);

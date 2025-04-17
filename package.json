@@ -1,14 +1,39 @@
 {
   "name": "bookgpt",
   "version": "1.0.0",
-  "description": "AI Book Recommender Application",
-  "main": "frontend/index.html",
+  "description": "AI-powered book recommendation chatbot",
+  "main": "frontend/script.js",
   "scripts": {
-    "start": "python backend/main.py"
+    "dev": "vercel dev",
+    "build": "echo 'Build handled by Vercel'",
+    "deploy": "vercel --prod",
+    "preview": "vercel",
+    "package-plugin": "node scripts/package-plugin.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/bookgptwp.git"
+  },
+  "keywords": [
+    "book",
+    "recommendations",
+    "chatbot",
+    "ai",
+    "openai",
+    "wordpress",
+    "plugin"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/yourusername/bookgptwp/issues"
+  },
+  "homepage": "https://github.com/yourusername/bookgptwp#readme",
   "engines": {
     "node": ">=14.0.0"
   },
-  "author": "",
-  "license": "ISC"
+  "devDependencies": {
+    "archiver": "^5.3.1",
+    "vercel": "^31.0.0"
+  }
 }

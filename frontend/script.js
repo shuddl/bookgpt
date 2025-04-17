@@ -1,7 +1,26 @@
 (function() { // IIFE Start
     // Backend API URL - Determine environment dynamically
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const API_URL = isLocalhost ? 'http://localhost:8005/api/chat' : '/api/chat';
+    const determineApiUrl = () => {
+        // WordPress integration - check for API URL configuration
+        if (window.bookGptConfig && window.bookGptConfig.apiUrl) {
+            console.log(`Using WordPress configured API URL: ${window.bookGptConfig.apiUrl}`);
+            return window.bookGptConfig.apiUrl;
+        }
+        
+        // Check if we're running on localhost
+        const isLocalhost = window.location.hostname === 'localhost' || 
+                           window.location.hostname === '127.0.0.1';
+        
+        if (isLocalhost) {
+            return 'http://localhost:8005/api/chat';
+        }
+        
+        // Default to relative path for Vercel deployment or other scenarios
+        // This works when the frontend and backend are deployed together
+        return '/api/chat';
+    };
+
+    const API_URL = determineApiUrl();
     console.log(`Using API URL: ${API_URL} on host: ${window.location.hostname}`);
 
     // Generate a unique session ID for this conversation

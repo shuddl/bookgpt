@@ -3,24 +3,131 @@
  * Web Worker for handling tracking operations in the background
  */
 
-// IMPORTANT: Register the message event listener immediately during initial script evaluation
-// This prevents the "Event handler of 'message' event must be added on initial evaluation" warning
+// BookGPT WordPress Web Worker
+// This worker handles background processing and analytics tracking for WordPress installations
+
+/**
+ * Process a user message in the background
+ * @param {string} message - The message text to process
+ */
+function processMessage(message) {
+    // Simple background processing example
+    const result = {
+        processed: true,
+        length: message.length,
+        keywords: extractKeywords(message)
+    };
+    
+    // Send result back to main thread
+    self.postMessage({
+        type: 'message_processed',
+        result: result
+    });
+}
+
+/**
+ * Extract potential keywords from a message
+ * @param {string} message - The message to analyze
+ * @returns {Array} - Extracted keywords
+ */
+function extractKeywords(message) {
+    const text = message.toLowerCase();
+    const keywords = [];
+    
+    const genreKeywords = [
+        'fantasy', 'sci-fi', 'science fiction', 'mystery', 'thriller',
+        'horror', 'romance', 'historical', 'fiction', 'non-fiction',
+        'biography', 'autobiography', 'young adult', 'children'
+    ];
+    
+    genreKeywords.forEach(keyword => {
+        if (text.includes(keyword)) {
+            keywords.push(keyword);
+        }
+    });
+    
+    return keywords;
+}
+
+/**
+ * Track analytics events
+ * @param {Object} event - The event to track
+ */
+function trackAnalytics(event) {
+    try {
+        // In WordPress context, we'll send data to admin-ajax.php
+        // The URL is passed from the main thread in bookGptConfig.analyticsUrl
+        const data = {
+            action: 'bookgpt_track_analytics',
+            nonce: self.bookGptConfig ? self.bookGptConfig.nonce : '',
+            event_data: JSON.stringify(event)
+        };
+        
+        // Log for debugging purposes
+        console.log('WordPress tracking event:', event);
+        
+        // In a real implementation, you would send this data to WordPress
+        // Note: Web Workers in WordPress may have CORS issues with admin-ajax.php
+        // As a fallback, the main thread should handle the actual AJAX request
+        
+        self.postMessage({
+            type: 'wp_analytics',
+            data: data,
+            success: true,
+            event: event
+        });
+    } catch (error) {
+        self.postMessage({
+            type: 'error',
+            error: `WordPress analytics error: ${error.message}`
+        });
+    }
+}
+
+/**
+ * Fetch book recommendations based on a query
+ * @param {string} query - The search query
+ */
+function fetchRecommendations(query) {
+    // This would normally make a fetch request to an API
+    // But for this worker we're sending back a notification to let the main thread handle it
+    self.postMessage({
+        type: 'fetch_request',
+        query: query
+    });
+}
+
+// Set up message event listener
 self.addEventListener('message', function(e) {
     const data = e.data;
     
+    // Store config for later use if provided
+    if (data.type === 'init' && data.config) {
+        self.bookGptConfig = data.config;
+        self.postMessage({
+            type: 'init_complete',
+            success: true
+        });
+        return;
+    }
+    
     switch (data.type) {
-        case 'track_event':
-            trackEvent(data);
+        case 'process_message':
+            processMessage(data.message);
             break;
             
-        case 'track_conversion':
-            trackConversion(data);
+        case 'track_analytics':
+            trackAnalytics(data.event);
+            break;
+            
+        case 'fetch_recommendations':
+            fetchRecommendations(data.query);
             break;
             
         default:
             self.postMessage({
                 type: 'error',
-                error: 'Unknown message type: ' + data.type
+                error: `Unknown message type: ${data.type}`
             });
     }
 });
