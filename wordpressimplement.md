@@ -176,3 +176,59 @@ For additional support:
 - Review the documentation in the GitHub repository
 - Open an issue for bug reports
 - Contact the developer for premium support options
+
+## New Widget Form of AI Chat
+
+### Overview
+
+The new widget form of the AI chat allows you to embed the chat widget seamlessly into your WordPress site. This widget form is designed to be flexible and customizable, providing a consistent user experience across different pages and posts.
+
+### Configuration
+
+1. **Enable Widget Form**: In your WordPress admin panel, navigate to **BookGPT > Settings** and enable the widget form option.
+2. **Customize Appearance**: Adjust the appearance settings to match your site's design. You can customize the widget's colors, position, and size.
+3. **Save Settings**: Save your settings to apply the changes.
+
+### Adding the Widget to Your Site
+
+You can add the widget form of the AI chat to your site using the following methods:
+
+#### Option 1: Use Default Widget Placement
+
+No further action required - the widget appears in the bottom-right corner of your site by default.
+
+#### Option 2: Use Shortcode
+
+Add the chatbot to specific pages or posts using the shortcode:
+
+```
+[bookgpt_widget width="350px" height="500px"]
+```
+
+#### Option 3: Use PHP Function
+
+Add to your theme's PHP files:
+
+```php
+<?php if (function_exists('bookgpt_display_widget')) { bookgpt_display_widget(); } ?>
+```
+
+### Customization Options
+
+The widget form of the AI chat can be customized through the following options:
+
+1. **Position**: Choose the position of the widget on the screen (e.g., bottom-right, bottom-left).
+2. **Theme**: Select the theme for the widget (e.g., light, dark).
+3. **Size**: Adjust the width and height of the widget to fit your site's layout.
+4. **Custom CSS**: Add custom CSS to further customize the appearance of the widget.
+
+### Troubleshooting
+
+If you encounter any issues with the widget form of the AI chat, follow these steps:
+
+1. **Check Configuration**: Ensure that the widget form is enabled and configured correctly in the settings.
+2. **Verify API URL**: Make sure the API URL is correctly set in the settings.
+3. **Inspect Console**: Check the browser console for any JavaScript errors or warnings.
+4. **Test Connection**: Use the "Test Connection" button in the settings to diagnose any connection issues.
+
+For additional support, refer to the main troubleshooting section or contact the developer for assistance.
