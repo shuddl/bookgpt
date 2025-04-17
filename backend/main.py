@@ -49,8 +49,9 @@ origins = [
     "http://localhost",
     "http://localhost:8080",
     "http://localhost:8081", 
-    "https://bookgpt.vercel.app",  # Vercel deployment URL
+    "https://bookgpt.vercel.app",  # Main Vercel deployment URL
     "https://bookgpt-*.vercel.app",  # Preview deployments
+    "*",  # Allow all origins - will be restricted by the webhook secret
     "null"  # Allow local file:// origin
 ]
 
