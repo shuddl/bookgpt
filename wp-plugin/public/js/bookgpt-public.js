@@ -98,4 +98,127 @@
             }
         });
     }
+
+    /**
+     * Initialize the widget form of the AI chat
+     */
+    function initializeWidgetForm() {
+        // Check if the widget container already exists
+        if (document.getElementById('book-chat-widget-container')) {
+            console.log('Widget form already initialized.');
+            return;
+        }
+
+        // Create the widget container
+        const widgetContainer = document.createElement('div');
+        widgetContainer.id = 'book-chat-widget-container';
+        document.body.appendChild(widgetContainer);
+
+        // Initialize the chat widget
+        initializeBookChatWidget();
+    }
+
+    /**
+     * Initialize the Book Chat Widget
+     */
+    function initializeBookChatWidget() {
+        const widgetContainer = document.getElementById('book-chat-widget-container');
+        if (!widgetContainer) {
+            console.error('BookGPT: Widget container not found.');
+            return;
+        }
+
+        // Create the widget header
+        const header = document.createElement('div');
+        header.id = 'widget-header';
+        header.innerHTML = `<h1>${window.bookGptConfig.widgetTitle || 'Book Recommendations'}</h1>`;
+        widgetContainer.appendChild(header);
+
+        // Create the chat area
+        const chatArea = document.createElement('div');
+        chatArea.id = 'widget-chat-area';
+        chatArea.innerHTML = `<div id="widget-message-list"></div>`;
+        widgetContainer.appendChild(chatArea);
+
+        // Create the input section
+        const inputSection = document.createElement('div');
+        inputSection.id = 'widget-input-section';
+        inputSection.innerHTML = `
+            <div id="widget-input-wrapper">
+                <textarea id="widget-user-input" placeholder="Ask for book recommendations..." rows="1"></textarea>
+                <button id="widget-send-button" aria-label="Send Message">&rarr;</button>
+            </div>
+            <div id="widget-disclaimer">
+                <p>AI recommendations powered by ChatGPT & Google Books. Links may be affiliated. This is a demo.</p>
+            </div>
+        `;
+        widgetContainer.appendChild(inputSection);
+
+        // Add event listener for send button
+        document.getElementById('widget-send-button').addEventListener('click', sendMessage);
+
+        // Add event listener for Enter key in textarea
+        document.getElementById('widget-user-input').addEventListener('keypress', function(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
+    }
+
+    /**
+     * Send user message to the chat bot
+     */
+    function sendMessage() {
+        const userInput = document.getElementById('widget-user-input');
+        const message = userInput.value.trim();
+        if (message === '') return;
+
+        // Display user message
+        displayMessage(message, 'user');
+
+        // Clear input
+        userInput.value = '';
+
+        // Send message to the chat bot
+        fetch(window.bookGptConfig.apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ message: message })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.response) {
+                displayMessage(data.response, 'bot');
+            } else {
+                displayMessage('Sorry, I could not process your request.', 'bot');
+            }
+        })
+        .catch(error => {
+            console.error('BookGPT: Error sending message', error);
+            displayMessage('Sorry, there was an error processing your request.', 'bot');
+        });
+    }
+
+    /**
+     * Display a message in the chat area
+     * @param {string} message - The message text
+     * @param {string} sender - The sender ('user' or 'bot')
+     */
+    function displayMessage(message, sender) {
+        const messageList = document.getElementById('widget-message-list');
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('widget-message', `widget-${sender}-message`);
+        messageElement.innerHTML = `<div class="widget-message-content">${message}</div>`;
+        messageList.appendChild(messageElement);
+
+        // Scroll to the bottom of the chat area
+        messageList.scrollTop = messageList.scrollHeight;
+    }
+
+    // Call the new widget initialization function
+    initializeWidgetForm();
+
 })(jQuery);

@@ -95,6 +95,26 @@ class BookGPT_Admin {
             'bookgpt-affiliate-links',
             array($this, 'display_affiliate_links_page')
         );
+
+        // Chat Bot Pros Page
+        add_submenu_page(
+            'bookgpt-dashboard',
+            __('Chat Bot Pros', 'bookgpt-wp'),
+            __('Chat Bot Pros', 'bookgpt-wp'),
+            'manage_options',
+            'bookgpt-chat-bot-pros',
+            array($this, 'display_chat_bot_pros_page')
+        );
+
+        // Prompt Amplifier Page
+        add_submenu_page(
+            'bookgpt-dashboard',
+            __('Prompt Amplifier', 'bookgpt-wp'),
+            __('Prompt Amplifier', 'bookgpt-wp'),
+            'manage_options',
+            'bookgpt-prompt-amplifier',
+            array($this, 'display_prompt_amplifier_page')
+        );
     }
 
     /**
@@ -166,6 +186,38 @@ class BookGPT_Admin {
             'bookgpt-settings',
             'bookgpt_appearance_settings'
         );
+
+        add_settings_field(
+            'chat_widget_width',
+            __('Widget Width', 'bookgpt-wp'),
+            array($this, 'chat_widget_width_callback'),
+            'bookgpt-settings',
+            'bookgpt_appearance_settings'
+        );
+
+        add_settings_field(
+            'chat_widget_height',
+            __('Widget Height', 'bookgpt-wp'),
+            array($this, 'chat_widget_height_callback'),
+            'bookgpt-settings',
+            'bookgpt_appearance_settings'
+        );
+
+        add_settings_field(
+            'chat_font_size',
+            __('Font Size', 'bookgpt-wp'),
+            array($this, 'chat_font_size_callback'),
+            'bookgpt-settings',
+            'bookgpt_appearance_settings'
+        );
+
+        add_settings_field(
+            'custom_css',
+            __('Custom CSS', 'bookgpt-wp'),
+            array($this, 'custom_css_callback'),
+            'bookgpt-settings',
+            'bookgpt_appearance_settings'
+        );
         
         // Affiliate Settings
         add_settings_section(
@@ -221,6 +273,38 @@ class BookGPT_Admin {
             array($this, 'enable_chat_history_callback'),
             'bookgpt-settings',
             'bookgpt_advanced_settings'
+        );
+
+        // Chat Bot Pro Settings
+        add_settings_section(
+            'bookgpt_chat_bot_pro_settings',
+            __('Chat Bot Pro Settings', 'bookgpt-wp'),
+            array($this, 'chat_bot_pro_settings_callback'),
+            'bookgpt-settings'
+        );
+
+        add_settings_field(
+            'chat_bot_pro_name',
+            __('Chat Bot Pro Name', 'bookgpt-wp'),
+            array($this, 'chat_bot_pro_name_callback'),
+            'bookgpt-settings',
+            'bookgpt_chat_bot_pro_settings'
+        );
+
+        add_settings_field(
+            'chat_bot_pro_description',
+            __('Chat Bot Pro Description', 'bookgpt-wp'),
+            array($this, 'chat_bot_pro_description_callback'),
+            'bookgpt-settings',
+            'bookgpt_chat_bot_pro_settings'
+        );
+
+        add_settings_field(
+            'chat_bot_pro_status',
+            __('Chat Bot Pro Status', 'bookgpt-wp'),
+            array($this, 'chat_bot_pro_status_callback'),
+            'bookgpt-settings',
+            'bookgpt_chat_bot_pro_settings'
         );
     }
     
@@ -306,6 +390,50 @@ class BookGPT_Admin {
         <input type='color' name='bookgpt_options[chat_widget_color]' value='<?php echo esc_attr($options['chat_widget_color'] ?? '#3b82f6'); ?>'>
         <?php
     }
+
+    /**
+     * Chat Widget Width field callback
+     */
+    public function chat_widget_width_callback() {
+        $options = get_option('bookgpt_options');
+        ?>
+        <input type='range' name='bookgpt_options[chat_widget_width]' min='300' max='500' step='10' value='<?php echo esc_attr($options['chat_widget_width'] ?? '350'); ?>' id='width-slider'>
+        <span id='width-value'><?php echo esc_html($options['chat_widget_width'] ?? '350'); ?>px</span>
+        <?php
+    }
+
+    /**
+     * Chat Widget Height field callback
+     */
+    public function chat_widget_height_callback() {
+        $options = get_option('bookgpt_options');
+        ?>
+        <input type='range' name='bookgpt_options[chat_widget_height]' min='400' max='700' step='10' value='<?php echo esc_attr($options['chat_widget_height'] ?? '500'); ?>' id='height-slider'>
+        <span id='height-value'><?php echo esc_html($options['chat_widget_height'] ?? '500'); ?>px</span>
+        <?php
+    }
+
+    /**
+     * Chat Font Size field callback
+     */
+    public function chat_font_size_callback() {
+        $options = get_option('bookgpt_options');
+        ?>
+        <input type='range' name='bookgpt_options[chat_font_size]' min='12' max='18' step='1' value='<?php echo esc_attr($options['chat_font_size'] ?? '14'); ?>' id='font-slider'>
+        <span id='font-value'><?php echo esc_html($options['chat_font_size'] ?? '14'); ?>px</span>
+        <?php
+    }
+
+    /**
+     * Custom CSS field callback
+     */
+    public function custom_css_callback() {
+        $options = get_option('bookgpt_options');
+        ?>
+        <textarea name='bookgpt_options[custom_css]' class='large-text code' rows='5'><?php echo esc_textarea($options['custom_css'] ?? ''); ?></textarea>
+        <p class="description"><?php _e('Add custom CSS styles to customize the widget appearance further.', 'bookgpt-wp'); ?></p>
+        <?php
+    }
     
     /**
      * Affiliate Settings section callback
@@ -385,6 +513,49 @@ class BookGPT_Admin {
     }
 
     /**
+     * Chat Bot Pro Settings section callback
+     */
+    public function chat_bot_pro_settings_callback() {
+        echo '<p>' . __('Configure the settings for your Chat Bot Pros.', 'bookgpt-wp') . '</p>';
+    }
+
+    /**
+     * Chat Bot Pro Name field callback
+     */
+    public function chat_bot_pro_name_callback() {
+        $options = get_option('bookgpt_options');
+        ?>
+        <input type='text' name='bookgpt_options[chat_bot_pro_name]' class='regular-text' value='<?php echo esc_attr($options['chat_bot_pro_name'] ?? ''); ?>'>
+        <p class="description"><?php _e('Name of the Chat Bot Pro.', 'bookgpt-wp'); ?></p>
+        <?php
+    }
+
+    /**
+     * Chat Bot Pro Description field callback
+     */
+    public function chat_bot_pro_description_callback() {
+        $options = get_option('bookgpt_options');
+        ?>
+        <textarea name='bookgpt_options[chat_bot_pro_description]' class='large-text' rows='4'><?php echo esc_textarea($options['chat_bot_pro_description'] ?? ''); ?></textarea>
+        <p class="description"><?php _e('Description of the Chat Bot Pro.', 'bookgpt-wp'); ?></p>
+        <?php
+    }
+
+    /**
+     * Chat Bot Pro Status field callback
+     */
+    public function chat_bot_pro_status_callback() {
+        $options = get_option('bookgpt_options');
+        $status = $options['chat_bot_pro_status'] ?? 'inactive';
+        ?>
+        <select name='bookgpt_options[chat_bot_pro_status]'>
+            <option value='active' <?php selected($status, 'active'); ?>><?php _e('Active', 'bookgpt-wp'); ?></option>
+            <option value='inactive' <?php selected($status, 'inactive'); ?>><?php _e('Inactive', 'bookgpt-wp'); ?></option>
+        </select>
+        <?php
+    }
+
+    /**
      * Display the main dashboard page
      */
     public function display_dashboard_page() {
@@ -442,6 +613,20 @@ class BookGPT_Admin {
         $top_performing_books = $analytics->get_top_performing_books(10);
         
         include_once BOOKGPT_PLUGIN_DIR . 'admin/partials/affiliate-links-display.php';
+    }
+
+    /**
+     * Display the chat bot pros page
+     */
+    public function display_chat_bot_pros_page() {
+        include_once BOOKGPT_PLUGIN_DIR . 'admin/partials/chat-bot-pros-display.php';
+    }
+
+    /**
+     * Display the prompt amplifier page
+     */
+    public function display_prompt_amplifier_page() {
+        include_once BOOKGPT_PLUGIN_DIR . 'admin/partials/prompt-amplifier-display.php';
     }
     
     /**
@@ -528,5 +713,61 @@ class BookGPT_Admin {
         } else {
             wp_send_json_success('API connection successful');
         }
+    }
+
+    /**
+     * Create a new chat bot pro
+     */
+    public function create_chat_bot_pro($name, $description, $status) {
+        $chat_bot_pros = get_option('bookgpt_chat_bot_pros', array());
+        $chat_bot_pros[] = array(
+            'name' => sanitize_text_field($name),
+            'description' => sanitize_textarea_field($description),
+            'status' => sanitize_text_field($status)
+        );
+        update_option('bookgpt_chat_bot_pros', $chat_bot_pros);
+    }
+
+    /**
+     * Update an existing chat bot pro
+     */
+    public function update_chat_bot_pro($index, $name, $description, $status) {
+        $chat_bot_pros = get_option('bookgpt_chat_bot_pros', array());
+        if (isset($chat_bot_pros[$index])) {
+            $chat_bot_pros[$index] = array(
+                'name' => sanitize_text_field($name),
+                'description' => sanitize_textarea_field($description),
+                'status' => sanitize_text_field($status)
+            );
+            update_option('bookgpt_chat_bot_pros', $chat_bot_pros);
+        }
+    }
+
+    /**
+     * Delete a chat bot pro
+     */
+    public function delete_chat_bot_pro($index) {
+        $chat_bot_pros = get_option('bookgpt_chat_bot_pros', array());
+        if (isset($chat_bot_pros[$index])) {
+            unset($chat_bot_pros[$index]);
+            update_option('bookgpt_chat_bot_pros', array_values($chat_bot_pros));
+        }
+    }
+
+    /**
+     * Monitor chat bot pros
+     */
+    public function monitor_chat_bot_pros() {
+        $chat_bot_pros = get_option('bookgpt_chat_bot_pros', array());
+        foreach ($chat_bot_pros as $index => $chat_bot_pro) {
+            // Add monitoring logic here
+        }
+    }
+
+    /**
+     * Generate a prompt amplifier
+     */
+    public function generate_prompt_amplifier($prompt) {
+        // Add prompt amplifier logic here
     }
 }
