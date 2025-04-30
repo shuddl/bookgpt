@@ -13,7 +13,7 @@ jobs:
           cache: 'npm'
       
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v3
         with:
           python-version: '3.9'
 
@@ -43,52 +43,29 @@ jobs:
           npm install node-fetch
           API_URL="${{ env.VERCEL_DEPLOYMENT_URL }}/api/chat" node scripts/test-api.js
 
-  package-wp-plugin:
-    name: Package WordPress Plugin
+  deploy-wordpress:
+    name: Deploy WordPress Plugin
     runs-on: ubuntu-latest
-    needs: deploy-vercel
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-          cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Update plugin with Vercel API URL
-        run: |
-          API_URL="${{ needs.deploy-vercel.outputs.deployment_url }}/api/chat"
-          echo "API_URL=$API_URL"
-          echo "{\"api_url\":\"$API_URL\",\"webhook_secret\":\"${{ secrets.WEBHOOK_SECRET }}\"}" > ./wp-plugin/deployment_config.json
-      
-      - name: Package WordPress plugin
-        run: npm run package-plugin
-      
-      - name: Upload plugin artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: bookgpt-wp-plugin
-          path: dist/bookgpt-wp.zip
-          if-no-files-found: error
-      
-      - name: Create Release
-        if: github.event.inputs.environment == 'production' || github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v1
-        with:
-          files: dist/bookgpt-wp.zip
-          name: BookGPT WP v${{ github.run_number }}
-          tag_name: v${{ github.run_number }}
-          body: |
-            BookGPT WordPress Plugin (automatically released)
-            
-            Changes in this release:
-            - Updated with latest Vercel API URL: ${{ needs.deploy-vercel.outputs.deployment_url }}
-            - See commit history for detailed changes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          extensions: mbstring, xml, curl
+
+      - name: Install Composer
+        run: |
+          curl -sS https://getcomposer.org/installer | php
+          php composer.phar install
+
+      - name: Deploy to WordPress
+        run: |
+          wp plugin install bookgpt-wp --activate
+          wp plugin update bookgpt-wp
+
+      - name: Configure WordPress Plugin
+        run: |
+          wp option update bookgpt_options '{"api_url":"${{ secrets.WORDPRESS_API_URL }}","webhook_secret":"${{ secrets.WEBHOOK_SECRET }}"}'

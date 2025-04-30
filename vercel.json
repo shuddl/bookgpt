@@ -40,6 +40,7 @@
     "OPENAI_API_KEY": "@openai_api_key",
     "GOOGLE_BOOKS_API_KEY": "@google_books_api_key",
     "WEBHOOK_SECRET": "@webhook_secret",
-    "AMAZON_ASSOCIATE_TAG": "@amazon_associate_tag"
+    "AMAZON_ASSOCIATE_TAG": "@amazon_associate_tag",
+    "WORDPRESS_API_URL": "@wordpress_api_url"
   }
 }
