@@ -106,3 +106,69 @@ If having trouble with the plugin:
 The webhook_secret only needs to match between your backend and WordPress plugin - it's a shared secret that both components use to verify communications.
 
 If you're still experiencing issues after trying these simpler deployment options, please provide specific error messages for more targeted help.
+
+## Option 4: Automated Deployment with Vercel
+
+For those who prefer an automated deployment process, Vercel offers a streamlined solution.
+
+### Step 1: Set Up Vercel Project
+
+1. Create a [Vercel](https://vercel.com) account
+2. Install Vercel CLI: `npm install -g vercel`
+3. Clone your GitHub repository: `git clone https://github.com/yourusername/bookgptwp.git`
+4. Navigate to the project directory: `cd bookgptwp`
+
+### Step 2: Configure Environment Variables
+
+Create a `.env` file in the project root with the following variables:
+
+```
+OPENAI_API_KEY=your_openai_api_key
+GOOGLE_BOOKS_API_KEY=your_google_books_api_key
+WEBHOOK_SECRET=a_random_secure_string
+AMAZON_ASSOCIATE_TAG=your_amazon_associate_tag
+```
+
+### Step 3: Deploy to Vercel
+
+The simplest way to deploy is using the Vercel CLI:
+
+```bash
+vercel login  # If not already logged in
+vercel        # For preview deployment
+# OR
+vercel --prod # For production deployment
+```
+
+Alternatively, you can connect your GitHub repository to Vercel for automatic deployments.
+
+### Step 4: Configure Secrets in Vercel
+
+After the initial deployment, make sure to add environment variables in the Vercel dashboard:
+
+1. Go to your Vercel project
+2. Navigate to Settings → Environment Variables
+3. Add the same environment variables from your `.env` file
+
+### Step 5: Verify Deployment
+
+Once deployed, visit your Vercel URL to confirm the application is working correctly.
+
+### Step 6: Configure WordPress Plugin
+
+1. Edit the `wp-plugin/deployment_config.json` file:
+   ```json
+   {
+     "api_url": "https://your-vercel-url.vercel.app/api/chat",
+     "webhook_secret": "same_webhook_secret_from_backend"
+   }
+   ```
+2. Zip the WordPress plugin folder:
+   ```bash
+   zip -r bookgpt-wp.zip wp-plugin
+   ```
+3. Upload to WordPress: Admin → Plugins → Add New → Upload Plugin
+
+## Conclusion
+
+With these deployment options, you can choose the method that best fits your needs. Whether you prefer the simplicity of Render.com, the flexibility of Docker, the direct approach of PythonAnywhere, or the automation of Vercel, you can get your BookGPT project up and running smoothly.
