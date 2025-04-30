@@ -181,5 +181,11 @@ function bookgpt_create_db_tables() {
 }
 register_activation_hook(__FILE__, 'bookgpt_create_db_tables');
 
+// Ensure the plugin activates automatically upon installation
+activate_plugin(plugin_basename(__FILE__));
+
+// Ensure the plugin deactivates correctly
+deactivate_plugins(plugin_basename(__FILE__));
+
 // Initialize the plugin
 run_bookgpt();
