@@ -10,6 +10,7 @@ import openai
 import aiohttp
 import json
 from dotenv import load_dotenv
+import redis
 
 # Load environment variables from .env file
 load_dotenv()
@@ -28,6 +29,10 @@ google_books_api_key = os.getenv("GOOGLE_BOOKS_API_KEY")
 if not google_books_api_key:
     print("WARNING: GOOGLE_BOOKS_API_KEY environment variable not set.")
     # Consider raising an error in a real app or disabling functionality
+
+# Initialize Redis client
+redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+redis_client = redis.from_url(redis_url)
 
 class ChatRequest(BaseModel):
     user_id: str
@@ -65,71 +70,50 @@ app.add_middleware(
 
 async def process_nlp(text: str, current_stage: str) -> dict:
     """
-    Placeholder for NLP processing (Intent Recognition & Entity Extraction).
-    Currently uses basic keywords, will be replaced by an LLM call.
+    Process user input using OpenAI's GPT-3.5-turbo for intent recognition and entity extraction.
     Input: user message, current conversation stage.
     Output: dict e.g., {'intent': 'REQUEST_RECOMMENDATION', 'entities': {'genre': 'sci-fi'}, 'refined_message': '...'}
     """
-    print(f"NLP Placeholder: Processing text: '{text}' in stage: {current_stage}")
-    intent = "UNKNOWN"
-    entities = {}
+    print(f"NLP: Processing text: '{text}' in stage: {current_stage}")
     
-    # Special case for empty messages or very short initial messages at INIT stage
-    if (not text or text.strip() == "") and current_stage == "INIT":
-        intent = "GREETING"
-        print("NLP: Empty message in INIT stage interpreted as GREETING")
-    else:
-        # --- Simple Keyword Logic (Replace with LLM in Prompt 9/Integration) ---
-        lower_text = text.lower()
+    if not client:
+        print("Error: OpenAI client not initialized.")
+        return {"intent": "UNKNOWN", "entities": {}, "refined_message": text}
+    
+    system_prompt = """You are an AI assistant. Analyze the user's message and extract the intent and entities.
+Respond with a JSON object containing:
+- "intent": The user's intent (e.g., REQUEST_RECOMMENDATION, GREETING).
+- "entities": A dictionary of extracted entities (e.g., {'genre': 'sci-fi'}).
+- "refined_message": The refined user message for further processing."""
+    
+    user_prompt = f"User message: '{text}'\nCurrent stage: '{current_stage}'"
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ]
+    
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            temperature=0.5,
+            max_tokens=150,
+            n=1,
+            stop=None
+        )
+        content = response.choices[0].message.content
+        print(f"NLP Response: {content}")
         
-        # IMPROVED: Greatly expanded list of recommendation keywords to match more user inputs
-        # Especially from the suggestion buttons
-        if any(word in lower_text for word in ["book", "recommend", "read", "suggest", "mystery", "fantasy", 
-                                             "sci-fi", "fiction", "novel", "like", "books", "thriller", "genre",
-                                             "bestseller", "this year", "bestsellers", "historical", "female",
-                                             "contemporary", "popular", "author", "hobbit"]):
-            intent = "REQUEST_RECOMMENDATION"
-            print(f"NLP: Intent set to REQUEST_RECOMMENDATION based on keywords in: '{lower_text}'")
-        elif any(word in lower_text for word in ["similar", "another"]):
-            intent = "REQUEST_SIMILAR" # Could be used later
-        elif any(word in lower_text for word in ["hi", "hello", "hey"]):
-            intent = "GREETING"
-
-        # Basic entity extraction (very rudimentary)
-        # IMPROVED: Extract more entities from button suggestions
-        if "sci-fi" in lower_text or "science fiction" in lower_text:
-            entities["genre"] = "Science Fiction"
-        if "fantasy" in lower_text:
-            entities["genre"] = "Fantasy"
-        if "thriller" in lower_text:
-            entities["genre"] = "Thriller"
-        if "mystery" in lower_text:
-            entities["genre"] = "Mystery"
-        if "bestseller" in lower_text or "this year" in lower_text:
-            entities["category"] = "Bestsellers"
-        if "historical" in lower_text and "fiction" in lower_text:
-            entities["genre"] = "Historical Fiction"
-        if "female" in lower_text and "author" in lower_text:
-            entities["author_attribute"] = "Female"
-        if "contemporary" in lower_text:
-            entities["genre"] = "Contemporary Fiction"
-        if "hobbit" in lower_text:
-            entities["similar_to"] = "The Hobbit"
-        # --- End Simple Logic ---
-        
-        # IMPROVED: If the message exactly matches one of our suggestions, always treat it as a recommendation request
-        suggestion_options = [
-            "suggest fantasy books", "recommend sci-fi", "books like the hobbit",
-            "mystery novels", "contemporary fiction", "bestsellers this year",
-            "historical fiction", "books by female authors", "popular mystery novels"
-        ]
-        if lower_text in suggestion_options:
-            intent = "REQUEST_RECOMMENDATION"
-            print(f"NLP: Intent set to REQUEST_RECOMMENDATION based on exact match to suggestion: '{lower_text}'")
-
-    nlp_result = {"intent": intent, "entities": entities, "refined_message": text} # Pass original message for now
-    print(f"NLP Placeholder: Result: {nlp_result}")
-    return nlp_result
+        nlp_result = json.loads(content)
+        return nlp_result
+    
+    except openai.APIError as e:
+        print(f"NLP Error: OpenAI API returned an API Error: {e}")
+    except Exception as e:
+        print(f"NLP Error: An unexpected error occurred: {e}")
+    
+    return {"intent": "UNKNOWN", "entities": {}, "refined_message": text}
 
 @app.get("/")
 async def root():
