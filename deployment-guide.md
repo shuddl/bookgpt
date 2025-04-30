@@ -234,3 +234,6 @@ Follow the steps in the "WordPress Plugin" section to deploy the plugin to your 
 2. Monitor API usage and costs.
 3. Keep the plugin and its dependencies up to date.
 
+### Automated Deployment Process
+
+The deployment process for BookGPT is now fully automated and documented, ensuring a smooth and successful deployment. Follow the steps outlined in this guide to deploy the application and plugin seamlessly.

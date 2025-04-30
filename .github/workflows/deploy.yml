@@ -69,3 +69,47 @@ jobs:
       - name: Configure WordPress Plugin
         run: |
           wp option update bookgpt_options '{"api_url":"${{ secrets.WORDPRESS_API_URL }}","webhook_secret":"${{ secrets.WEBHOOK_SECRET }}"}'
+
+  deploy-backend:
+    name: Deploy Backend to Vercel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python3.9 -m pip install --upgrade pip
+          python3.9 -m pip install --disable-pip-version-check --target . werkzeug==1.0.1
+
+      - name: Pull Vercel environment information
+        run: npx vercel pull --yes --environment=${{ github.event.inputs.environment || 'production' }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build project artifacts
+        run: npx vercel build --${{ github.event.inputs.environment || 'prod' }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy project artifacts to Vercel
+        id: vercel-deployment
+        run: |
+          DEPLOYMENT_URL=$(npx vercel deploy --prebuilt --${{ github.event.inputs.environment || 'prod' }} --token=${{ secrets.VERCEL_TOKEN }})
+          echo "VERCEL_DEPLOYMENT_URL=$DEPLOYMENT_URL" >> $GITHUB_ENV
+          echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+
+      - name: Print deployment URL
+        run: echo "Deployed to ${{ env.VERCEL_DEPLOYMENT_URL }}"
+
+      - name: Test API after deployment
+        run: |
+          npm install node-fetch
+          API_URL="${{ env.VERCEL_DEPLOYMENT_URL }}/api/chat" node scripts/test-api.js
