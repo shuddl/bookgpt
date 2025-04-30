@@ -20,17 +20,14 @@ load_dotenv()
 # Initialize OpenAI client
 openai_api_key = os.getenv("OPENAI_API_KEY")
 if not openai_api_key:
-    print("WARNING: OPENAI_API_KEY environment variable not set.")
-    # Consider raising an error in a real app: raise ValueError("Missing OpenAI API Key")
-    client = None  # Or handle appropriately
+    raise ValueError("Missing OpenAI API Key")
 else:
     client = openai.AsyncOpenAI(api_key=openai_api_key)
 
 # Initialize Google Books API key
 google_books_api_key = os.getenv("GOOGLE_BOOKS_API_KEY")
 if not google_books_api_key:
-    print("WARNING: GOOGLE_BOOKS_API_KEY environment variable not set.")
-    # Consider raising an error in a real app or disabling functionality
+    raise ValueError("Missing Google Books API Key")
 
 # Initialize Redis client
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")

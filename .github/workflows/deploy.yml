@@ -25,6 +25,12 @@ jobs:
       - name: Pull Vercel environment information
         run: npx vercel pull --yes --environment=${{ github.event.inputs.environment || 'production' }} --token=${{ secrets.VERCEL_TOKEN }}
 
+      - name: Install project dependencies
+        run: npm install
+
+      - name: Build frontend assets
+        run: npm run build
+
       - name: Build project artifacts
         run: npx vercel build --${{ github.event.inputs.environment || 'prod' }} --token=${{ secrets.VERCEL_TOKEN }}
 

@@ -205,5 +205,10 @@ add_action('init', 'bookgpt_production_configurations');
 function bookgpt_handle_settings_and_options() {
     // Add logic to handle WordPress-specific settings and options
     // For example, updating options, handling form submissions, etc.
+    if (isset($_POST['bookgpt_options'])) {
+        $options = get_option('bookgpt_options', array());
+        $options = array_merge($options, $_POST['bookgpt_options']);
+        update_option('bookgpt_options', $options);
+    }
 }
 add_action('admin_init', 'bookgpt_handle_settings_and_options');

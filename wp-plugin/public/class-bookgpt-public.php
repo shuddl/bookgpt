@@ -220,4 +220,52 @@ class BookGPT_Public {
             wp_send_json_error('Failed to track event');
         }
     }
+
+    /**
+     * Send a message to the chat bot
+     * 
+     * @since    1.0.0
+     * @param    string    $message    The message to send
+     * @return   array     The response from the chat bot
+     */
+    public function sendMessageToServer($message) {
+        // Get plugin options
+        $options = get_option('bookgpt_options', array());
+        
+        // Check if API URL is configured
+        if (empty($options['api_url'])) {
+            return array('error' => 'API URL not configured.');
+        }
+        
+        // Prepare request data
+        $request_data = array(
+            'user_id' => 'wp_user_' . get_current_user_id(),
+            'message' => $message
+        );
+        
+        // Send request to chat bot API
+        $response = wp_remote_post($options['api_url'], array(
+            'timeout' => 15,
+            'headers' => array(
+                'Content-Type' => 'application/json',
+            ),
+            'body' => json_encode($request_data)
+        ));
+        
+        // Check for errors
+        if (is_wp_error($response)) {
+            return array('error' => $response->get_error_message());
+        }
+        
+        // Parse response
+        $response_body = wp_remote_retrieve_body($response);
+        $response_data = json_decode($response_body, true);
+        
+        // Check for valid response
+        if (empty($response_data) || !isset($response_data['bot_message'])) {
+            return array('error' => 'Invalid response from chat bot.');
+        }
+        
+        return $response_data;
+    }
 }
