@@ -13,7 +13,7 @@ jobs:
           cache: 'npm'
       
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v3
         with:
           python-version: '3.9'
 
@@ -42,3 +42,30 @@ jobs:
         run: |
           npm install node-fetch
           API_URL="${{ env.VERCEL_DEPLOYMENT_URL }}/api/chat" node scripts/test-api.js
+
+  deploy-wordpress:
+    name: Deploy WordPress Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          extensions: mbstring, xml, curl
+
+      - name: Install Composer
+        run: |
+          curl -sS https://getcomposer.org/installer | php
+          php composer.phar install
+
+      - name: Deploy to WordPress
+        run: |
+          wp plugin install bookgpt-wp --activate
+          wp plugin update bookgpt-wp
+
+      - name: Configure WordPress Plugin
+        run: |
+          wp option update bookgpt_options '{"api_url":"${{ secrets.WORDPRESS_API_URL }}","webhook_secret":"${{ secrets.WEBHOOK_SECRET }}"}'

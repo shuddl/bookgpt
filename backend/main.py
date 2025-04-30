@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 import uvicorn
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
@@ -673,6 +673,34 @@ Make sure your response is a valid parsable JSON object with a 'recommendations'
         print(f"LLM Error: An unexpected error occurred: {e}")
 
     return []  # Return empty list on error
+
+@app.post("/api/webhook")
+async def handle_webhook(request: Request):
+    """
+    Handle incoming webhook requests from WordPress.
+    Verifies the webhook signature and processes the payload.
+    """
+    # Verify webhook signature
+    webhook_secret = os.getenv("WEBHOOK_SECRET")
+    if not webhook_secret:
+        raise HTTPException(status_code=500, detail="Webhook secret not configured")
+
+    signature = request.headers.get("X-BookGPT-Signature")
+    if not signature:
+        raise HTTPException(status_code=400, detail="Missing webhook signature")
+
+    payload = await request.body()
+    expected_signature = hmac.new(webhook_secret.encode(), payload, hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(expected_signature, signature):
+        raise HTTPException(status_code=403, detail="Invalid webhook signature")
+
+    # Process the webhook payload
+    data = await request.json()
+    # Add your logic to handle the webhook data here
+    print(f"Webhook received: {data}")
+
+    return {"status": "success"}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8005, reload=True)
